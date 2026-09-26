@@ -8,7 +8,7 @@
     "start": "tsx src/index.ts"
   },
   "dependencies": {
-    "@atlasent/sdk": "2.10.0"
+    "@atlasent/sdk": "2.16.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
