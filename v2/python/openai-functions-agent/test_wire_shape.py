@@ -10,8 +10,8 @@ No network calls, no live API key, no pytest required — run directly:
 Background: this example
 used to build a raw ``{agent, action, resource, context}`` payload and POST
 it directly via ``httpx``, bypassing the ``atlasent`` SDK's normalization.
-The real ``/v1-evaluate`` handler (``atlasent-api``
-``supabase/functions/v1-evaluate/handler.ts``) requires ``action_type`` /
+The real ``/v1-evaluate`` handler (the AtlaSent API's evaluate
+handler) requires ``action_type`` /
 ``actor_id`` at the top level and has no ``agent`` / ``action`` alias on the
 wire, so that payload would 400 against the live API. This test pins the
 actual wire contract so a reintroduced ``agent``/``action`` shape fails
@@ -22,8 +22,8 @@ from __future__ import annotations
 from agent import WIRE_ITEM_KEYS, _build_items
 
 # The real /v1-evaluate + /v1/evaluate/batch wire fields required at the
-# top level of every item (atlasent-api supabase/functions/v1-evaluate/
-# handler.ts and v1-evaluate-batch/handler.ts's BatchItem interface).
+# top level of every item (the AtlaSent API's evaluate handler and its
+# batch-evaluate handler's BatchItem interface).
 REQUIRED_KEYS = {"action_type", "actor_id", "context"}
 
 # The legacy shape this example used to send. Must never reappear.

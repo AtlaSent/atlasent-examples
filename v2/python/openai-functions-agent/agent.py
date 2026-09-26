@@ -67,8 +67,8 @@ IMPL = {
 
 
 #: The real /v1-evaluate (and /v1/evaluate/batch) wire contract, per
-#: atlasent-api's `supabase/functions/v1-evaluate/handler.ts` and
-#: `v1-evaluate-batch/handler.ts` `BatchItem` interface: each item is a
+#: the AtlaSent API's evaluate handler and its batch-evaluate handler's
+#: `BatchItem` interface: each item is a
 #: flat dict with these top-level keys. There is no `agent`/`action`
 #: shape on the wire — see `tests/test_wire_shape.py` in this directory,
 #: which asserts on exactly this set.

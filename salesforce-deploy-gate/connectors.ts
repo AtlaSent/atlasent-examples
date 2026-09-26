@@ -41,7 +41,7 @@
  *     deploy/validate call). For ServiceNow (no equivalent official CLI), it
  *     makes a direct, read-only Table API GET using credentials the caller
  *     supplies (an itil-scoped integration user, matching the pattern proven
- *     live in `atlasent-api/docs/integrations/SERVICENOW_OAUTH_SETUP.md`) — it
+ *     live in AtlaSent's internal ServiceNow OAuth setup guide) — it
  *     does not call any AtlaSent-side connector-management endpoint.
  *   - **Read-only, matching the CLI connectors' own scope.** The Salesforce/
  *     NetSuite connectors run `validate`/`--dryrun` — they never execute a real
@@ -353,7 +353,7 @@ export interface HttpFetchResult {
  * Fetches a `change_request` record from the ServiceNow Table API by change
  * number. Real HTTPS GET via the global `fetch`, Basic Auth against a
  * scoped `itil`-role integration user — the pattern proven live in
- * `atlasent-api/docs/integrations/SERVICENOW_OAUTH_SETUP.md` (a real PDI,
+ * AtlaSent's internal ServiceNow OAuth setup guide (a real PDI,
  * `itil` not `itil_admin`). Never throws — a network failure, non-2xx
  * response, or unparseable body all resolve to `{ ok: false, reason }` so the
  * caller can fall back to a stub rather than throw mid-run.

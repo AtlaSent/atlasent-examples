@@ -9,8 +9,8 @@ See LICENSE for the full license text.
 ATTRIBUTION
 -----------
 Examples in this repository demonstrate usage of the AtlaSent platform.
-The AtlaSent core runtime (atlasent-api, atlasent-console,
-atlasent-control-plane) is governed by the AtlaSent Software License 1.0.
+The AtlaSent core runtime (the AtlaSent API, console and
+control plane) is governed by the AtlaSent Software License 1.0.
 
 For commercial licensing of core infrastructure: licensing@atlasent.io
 

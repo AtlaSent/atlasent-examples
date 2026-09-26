@@ -90,4 +90,4 @@ const result = await verifyBundle(bundle, { publicKeysPem: [pem] });
 - `verifyAuditBundle()` (lower-level, takes pre-imported `VerifyKey[]`) — exported from `@atlasent/sdk`
 - `signedBytesFor()` — recreates the exact envelope the backend signed
 - `atlasent-sdk/typescript/src/auditBundle.ts` — the full offline verifier source
-- `atlasent-api/supabase/functions/v1-audit/verify.ts` — the reference verifier (source of truth)
+- The AtlaSent API's audit verify handler — the reference verifier (source of truth; not public)

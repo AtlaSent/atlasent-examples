@@ -27,7 +27,7 @@ ATLASENT_DRY_RUN=true python agent.py
 ## Wire shape
 
 Each tool call is authorized as `{action_type, actor_id, context, resource_id}`
-— the real `/v1-evaluate` contract (`atlasent-api`
-`supabase/functions/v1-evaluate/handler.ts`). There is no `agent`/`action`
+— the real `/v1-evaluate` contract (the AtlaSent API's evaluate
+handler). There is no `agent`/`action`
 top-level shape on the wire; see `tests/test_wire_shape.py` for a standalone
 assertion of this.

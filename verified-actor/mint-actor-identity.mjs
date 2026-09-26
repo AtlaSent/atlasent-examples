@@ -20,7 +20,7 @@
 
 const { subtle } = globalThis.crypto;
 
-// ── byte-identical to atlasent-api _shared/canonical.ts ──────────────
+// ── byte-identical to the AtlaSent API's shared canonicalizer ────────
 function canonicalize(value) {
   if (value === undefined) return "null";
   if (value === null || typeof value !== "object") return JSON.stringify(value);
