@@ -1,7 +1,9 @@
 version: 2
 updates:
   - package-ecosystem: npm
-    directory: /
+    # No root package.json: each example is its own npm package.
+    directories:
+      - "/**"
     schedule:
       interval: weekly
     groups:
