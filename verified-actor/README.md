@@ -24,9 +24,8 @@ the signature locally, and prints:
 3. the **spoofed** request (no assertion → `deny ACTOR_UNVERIFIED`),
 4. the **verified** request (assertion attached → `allow` + signed evidence).
 
-The script's canonicalization is byte-identical to the runtime verifier
-(`_shared/actor_identity.ts` / `_shared/canonical.ts`), so the signature it
-produces verifies server-side unchanged. (Validated: a minted assertion returns
+The script's canonicalization is byte-identical to the runtime verifier's,
+so the signature it produces verifies server-side unchanged. (Validated: a minted assertion returns
 `{ ok: true }` from the runtime `verifyActorIdentity`.)
 
 ## What you'll see
@@ -51,6 +50,5 @@ construction.
 
 ## Next steps
 
-- Operator setup: [`atlasent-docs/guides/verified-actor-enablement.md`](https://docs.atlasent.io)
-- The `ACTOR_UNVERIFIED` deny code: `atlasent-docs/guides/deny-codes.md`
-- L2 scope: `atlasent-docs/plans/independent-identity-verification.md`
+- Operator setup and the `ACTOR_UNVERIFIED` deny code: see the
+  [AtlaSent documentation](https://docs.atlasent.io).

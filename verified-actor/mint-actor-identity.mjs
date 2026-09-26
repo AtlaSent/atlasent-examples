@@ -14,9 +14,9 @@
 //      the SPOOFED one (no assertion -> deny ACTOR_UNVERIFIED) and the
 //      VERIFIED one (assertion attached -> allow + signed evidence).
 //
-// The canonicalize() below is copied verbatim from the runtime's
-// _shared/canonical.ts so the signature this script produces verifies on the
-// server. See guides/verified-actor-enablement.md for the operator steps.
+// The canonicalize() below matches the AtlaSent runtime's canonicalization
+// byte for byte, so the signature this script produces verifies on the server.
+// See this directory's README for the operator steps.
 
 const { subtle } = globalThis.crypto;
 
@@ -38,8 +38,7 @@ function canonicalize(value) {
 
 const hex = (buf) => Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
 
-// The runtime strips `signature` and canonicalizes the rest (see
-// canonicalActorIdentityPayload in _shared/actor_identity.ts).
+// The runtime strips `signature` and canonicalizes the remaining fields.
 const signingPayload = (a) => {
   const { signature: _omit, ...rest } = a;
   return canonicalize(rest);

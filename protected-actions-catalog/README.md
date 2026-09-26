@@ -3,7 +3,7 @@
 This example wires the five canonical AtlaSent protected actions
 end to end through `evaluate → permit → verify → execute → audit`,
 in one TypeScript file. It is the runnable counterpart to
-[`atlasent-docs/guides/protected-actions-catalog.md`](https://docs.atlasent.io).
+the protected-actions catalog in the [AtlaSent documentation](https://docs.atlasent.io).
 
 The five actions are:
 

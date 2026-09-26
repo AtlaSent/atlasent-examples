@@ -26,9 +26,9 @@ BASE="${ATLASENT_BASE_URL:?set ATLASENT_BASE_URL (…/functions/v1)}"
 ACTOR="${ATLASENT_ACTOR:-github:github-actions[bot]}"
 SYSTEM="${TARGET_SYSTEM:-salesforce}"
 # Bare lowercase 64-char hex — NOT prefixed with "sha256:". v1-evaluate validates
-# execution_payload_hash against /^[0-9a-f]{64}$/i (handler.ts ~L3370); a prefixed
+# execution_payload_hash against /^[0-9a-f]{64}$/i; a prefixed
 # value fails that regex, so the hash is silently treated as absent — no binding is
-# recorded, and v1-verify-permit's FS33 payload-hash check (handler.ts ~L1117-1158)
+# recorded, and v1-verify-permit's payload-hash check
 # then has nothing to compare against and returns valid:true for ANY payload_hash,
 # including a genuinely swapped one. This previously masked SF-6 (expected
 # PAYLOAD_MISMATCH, silently passed instead) — see the preflight check below, which
@@ -83,7 +83,7 @@ evaluate() { # $1=actor $2=approvals $3=change_window $4=payload_hash $5=extra_c
           execution_payload_hash:$d,
           context:({ environment:"production", system:$sys,
                      approvals:$ap, change_window:$cw, state_snapshot:$d,
-                     # Vendor-neutral change-plan conventions (atlasent#438/#440). They ride the
+                     # Vendor-neutral change-plan conventions. They ride the
                      # OPEN evaluate context; canonical_plan_digest IS the execution_payload_hash
                      # the permit binds — no wire change. The lane runbook §5 asserts these in the
                      # exported evidence, so the driver must actually emit them.
@@ -183,7 +183,7 @@ case "$CASE" in
 
   SF-9) # live config edit — the state-snapshot execution profile of production.deploy (authorized change plan)
     # Salesforce-only by CONTRACT, not by omission: the frozen change-plan vocabulary
-    # (atlasent#438) defines exactly three plan_formats — salesforce-change-set,
+    # defines exactly three plan_formats — salesforce-change-set,
     # netsuite-sdf-project, salesforce-config-edit. There is no NetSuite config-edit
     # format, and minting one here would invent vocabulary the contract does not carry.
     # So under NetSuite this is a recorded SKIP with a reason, never a silent pass.

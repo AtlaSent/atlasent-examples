@@ -23,8 +23,8 @@ scripts/
 
 1. Copy this directory to the repo root of the reference repo.
 2. Provision the org's `production.deploy` via `seed_saas_production_safeguard(<org_id>)`
-   (enforced + `allow_actors`) — see the pack runbook and
-   AtlaSent's internal pilot deploy-gate provisioning runbook.
+   (enforced + `allow_actors`). AtlaSent performs this step for the
+   reference org; see the pack runbook.
 3. Set repo secrets:
    - `ATLASENT_API_KEY` — `ask_*` scoped `evaluate:write` + `verify:execute` (+ `audit:read`, `audit:export`)
    - `ATLASENT_BASE_URL` — `https://api.atlasent.io/functions/v1` (**must** end in `/functions/v1`; self-hosted: your deployment's `https://<ref>.supabase.co/functions/v1`)

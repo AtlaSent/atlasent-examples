@@ -33,7 +33,7 @@ V2 action strings provide richer context, enabling:
 ### Rollback demo (Python)
 
 ```bash
-pip install -r requirements.txt
+pip install atlasent   # this example has no requirements.txt
 
 # Full rollback demo (3 scenarios, offline stub, no API key required)
 python rollback.py

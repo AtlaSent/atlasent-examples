@@ -47,4 +47,4 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
 });
 ```
 
-See [guides/cursor.md](https://docs.atlasent.io) for the full integration guide.
+See the [AtlaSent documentation](https://docs.atlasent.io) for the full integration guide.
