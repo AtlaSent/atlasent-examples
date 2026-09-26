@@ -37,7 +37,7 @@ jobs:
     steps:
       - name: Request authorization; wait only when explicitly requested
         id: authorize
-        uses: AtlaSent-Systems-Inc/atlasent-action@0f892473d8f78d25d270eaccb0ee804b6ba66e71
+        uses: Atlasent/atlasent-action@0f892473d8f78d25d270eaccb0ee804b6ba66e71
         env:
           ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
           ATLASENT_BASE_URL: ${{ secrets.ATLASENT_BASE_URL }}
@@ -64,7 +64,7 @@ jobs:
           path: out/
       - name: Re-verify permit at the execution boundary
         id: boundary
-        uses: AtlaSent-Systems-Inc/atlasent-action@0f892473d8f78d25d270eaccb0ee804b6ba66e71
+        uses: Atlasent/atlasent-action@0f892473d8f78d25d270eaccb0ee804b6ba66e71
         env:
           ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
           ATLASENT_BASE_URL: ${{ secrets.ATLASENT_BASE_URL }}

@@ -49,9 +49,9 @@ The active enrollment must match every signed dimension exactly:
 
 | Dimension | Value |
 |---|---|
-| Repository | `AtlaSent-Systems-Inc/atlasent-examples` |
+| Repository | `Atlasent/atlasent-examples` |
 | Immutable repository ID | `1213717770` |
-| Workflow ref | `AtlaSent-Systems-Inc/atlasent-examples/.github/workflows/e2e-smoke.yml@refs/heads/main` |
+| Workflow ref | `Atlasent/atlasent-examples/.github/workflows/e2e-smoke.yml@refs/heads/main` |
 | Ref | `refs/heads/main` |
 | GitHub Environment | `staging` |
 | AtlaSent environment | `staging` |

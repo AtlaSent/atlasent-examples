@@ -7,7 +7,7 @@ No network calls, no live API key, no pytest required — run directly:
 (it also collects fine under pytest, since the assertions live in a
 `test_`-prefixed function — use whichever runner is convenient).
 
-Filed as part of AtlaSent-Systems-Inc/atlasent-examples#140: this example
+Background: this example
 used to build a raw ``{agent, action, resource, context}`` payload and POST
 it directly via ``httpx``, bypassing the ``atlasent`` SDK's normalization.
 The real ``/v1-evaluate`` handler (``atlasent-api``

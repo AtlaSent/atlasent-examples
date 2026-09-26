@@ -40,8 +40,8 @@ async function runFlow(respond) {
       ATLASENT_API_URL: `http://127.0.0.1:${address.port}`,
       SERVICE: 'payments-api',
       TARGET_ENV: 'production',
-      ACTOR: 'ci-bot@AtlaSent-Systems-Inc/atlasent-examples',
-      GITHUB_REPOSITORY: 'AtlaSent-Systems-Inc/atlasent-examples',
+      ACTOR: 'ci-bot@Atlasent/atlasent-examples',
+      GITHUB_REPOSITORY: 'Atlasent/atlasent-examples',
       GITHUB_REF: 'refs/heads/contract-test',
       GITHUB_SHA: 'abc123def456',
     },
@@ -82,7 +82,7 @@ test('uses the canonical evaluate and verify contracts without logging credentia
   assert.equal(result.requests[0].authorization, `Bearer ${apiKey}`);
   assert.deepEqual(result.requests[0].body, {
     action_type: 'production.deploy',
-    actor_id: 'ci-bot@AtlaSent-Systems-Inc/atlasent-examples',
+    actor_id: 'ci-bot@Atlasent/atlasent-examples',
     resource_id: 'payments-api',
     change_plan: { operation: 'deploy', revision: 'abc123def456' },
     context: {
@@ -90,7 +90,7 @@ test('uses the canonical evaluate and verify contracts without logging credentia
       target_id: 'payments-api',
       target: { id: 'payments-api' },
       environment: 'production',
-      repo: 'AtlaSent-Systems-Inc/atlasent-examples',
+      repo: 'Atlasent/atlasent-examples',
       ref: 'refs/heads/contract-test',
       commit_sha: 'abc123def456',
     },
@@ -99,7 +99,7 @@ test('uses the canonical evaluate and verify contracts without logging credentia
   assert.deepEqual(result.requests[1].body, {
     permit_token: permitToken,
     action_type: 'production.deploy',
-    actor_id: 'ci-bot@AtlaSent-Systems-Inc/atlasent-examples',
+    actor_id: 'ci-bot@Atlasent/atlasent-examples',
     environment: 'production',
     target_id: 'payments-api',
     payload_hash: executionHash,
