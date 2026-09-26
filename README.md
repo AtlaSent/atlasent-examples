@@ -15,14 +15,14 @@ Runnable example integrations — GitHub Actions, raw HTTP, and SDK quickstarts 
 
 Deploy Gate V1 examples for AtlaSent.
 
-This repository is intentionally focused on **one pilot story**: a team wants to let GitHub Actions deploy `checkout-api` to production only when AtlaSent issues and verifies a permit for the `production.deploy` action.
+The primary walkthrough follows a single scenario: a team wants GitHub Actions to deploy `checkout-api` to production only when AtlaSent issues and verifies a permit for the `production.deploy` action. The other directories apply the same evaluate → permit → verify pattern to other protected actions and runtimes.
 
 
 ## Observe before you gate
 
 The enforcement examples below are intentionally the later stage of the product journey. A connector can start in **Observe** mode: report bounded facts for an already-resolved Canon action, surface them in AtlaSent Action Inbox/History, and let the organization choose whether to protect that action.
 
-Observe-mode integrations must not claim authorization, approval, verification, enforcement, or coverage. A raw provider event name is not automatically a Canon action. The reference conformance implementation lives in the API monorepo's existing `@atlasent/connector-acceptance` package; enforcement examples in this repo remain fail-closed gate examples.
+Observe-mode integrations must not claim authorization, approval, verification, enforcement, or coverage. A raw provider event name is not automatically a Canon action: map it to a Canon action explicitly before reporting it. The examples in this repository are enforcement examples and stay fail-closed; they do not implement Observe mode.
 
 ## Deploy Gate V1 flow
 

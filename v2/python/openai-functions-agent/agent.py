@@ -71,7 +71,7 @@ IMPL = {
 #: `v1-evaluate-batch/handler.ts` `BatchItem` interface: each item is a
 #: flat dict with these top-level keys. There is no `agent`/`action`
 #: shape on the wire — see `tests/test_wire_shape.py` in this directory,
-#: which asserts on exactly this set (AtlaSent-Systems-Inc/atlasent-examples#140).
+#: which asserts on exactly this set.
 WIRE_ITEM_KEYS = {"action_type", "actor_id", "context", "resource_id"}
 
 

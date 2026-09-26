@@ -29,7 +29,7 @@ Add these repository secrets in **Settings → Secrets and variables → Actions
 ## Recommended: the published action
 
 For real pilots, prefer the maintained Marketplace action
-[`AtlaSent-Systems-Inc/atlasent-action`](https://github.com/AtlaSent-Systems-Inc/atlasent-action).
+[`Atlasent/atlasent-action`](https://github.com/Atlasent/atlasent-action).
 It uses the same gate but also **auto-sends a `state_snapshot`** (so it works
 against classes with `requires_state_snapshot=true`, where the raw calls below
 would be denied `SNAPSHOT_REQUIRED`), **derives approvals from PR reviews**, and
@@ -37,7 +37,7 @@ builds a signed evidence bundle.
 
 ```yaml
 - name: AtlaSent gate
-  uses: AtlaSent-Systems-Inc/atlasent-action@v1
+  uses: Atlasent/atlasent-action@v1
   env:
     ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
   with:
