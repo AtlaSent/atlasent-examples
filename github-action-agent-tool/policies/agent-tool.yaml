@@ -1,0 +1,39 @@
+# agent-tool.yaml
+#
+# AtlaSent policy bundle for agent tool call gating.
+# Load into the AtlaSent engine via the console or the API:
+#
+# NOTE: v1-policy-bundles is disabled in production and will return 404.
+# See atlasent-api/supabase/runtime-functions-disabled.json.
+# Use the AtlaSent Console UI to load policy bundles instead.
+#   curl -X POST https://api.atlasent.io/functions/v1/v1-policy-bundles \
+#     -H "Authorization: Bearer $ATLASENT_API_KEY" \
+#     -H "Content-Type: application/yaml" \
+#     --data-binary @policies/agent-tool.yaml
+
+policy_pack: agent-tool-v1
+version: "1.0"
+
+rules:
+  - id: bash-high-risk
+    description: bash tool calls are high risk and require witness
+    condition:
+      field: context.toolName
+      op: eq
+      value: bash
+    require:
+      witness: true
+    risk_level: high
+
+  - id: read-file-allow
+    description: read_file tool calls are low risk, allow by default
+    condition:
+      field: context.toolName
+      op: eq
+      value: read_file
+    decision: ALLOW
+    risk_level: low
+
+  - id: default-medium-risk
+    description: All other tool calls are medium risk
+    risk_level: medium

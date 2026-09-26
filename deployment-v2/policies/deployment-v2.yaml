@@ -1,0 +1,173 @@
+# deployment-v2.yaml
+#
+# AtlaSent policy bundle for V2 deployment and rollback authorization.
+# Load into the AtlaSent engine via the console or the API:
+#
+# NOTE: v1-policy-bundles is disabled in production and will return 404.
+# See atlasent-api/supabase/runtime-functions-disabled.json.
+# Use the AtlaSent Console UI to load policy bundles instead.
+#   curl -X POST https://api.atlasent.io/functions/v1/v1-policy-bundles \
+#     -H "Authorization: Bearer $ATLASENT_API_KEY" \
+#     -H "Content-Type: application/yaml" \
+#     --data-binary @policies/deployment-v2.yaml
+#
+# V2 action strings (migrated from V1):
+#   V1: production.deploy      → V2: deployment.production.execute
+#   V1: (new)                  → V2: deployment.staging.execute
+#   V1: (new)                  → V2: deployment.rollback.execute
+
+id: deployment-v2
+version: "2.0.0"
+description: >
+  Fail-closed authorization policy for V2 deployment and rollback actions.
+  production.execute requires change ticket + dual approval for HIGH risk
+  deployments. staging.execute allows on-call engineer. rollback.execute
+  requires incident commander role.
+
+# ---------------------------------------------------------------------------
+# Global configuration
+# ---------------------------------------------------------------------------
+
+config:
+  fail_closed: true            # transport / evaluation errors -> deny
+  audit_all_decisions: true    # record allow AND deny to the audit chain
+  permit_ttl_seconds: 300      # single-use permits expire after 5 minutes
+
+# ---------------------------------------------------------------------------
+# Role definitions
+# ---------------------------------------------------------------------------
+
+roles:
+  incident_commander:
+    members:
+      - ic.oncall@acme.example
+      - sre.lead@acme.example
+      - eng.director@acme.example
+
+  on_call_engineer:
+    # On-call engineers are resolved dynamically via PagerDuty escalation
+    # policy; list here is the static fallback.
+    members:
+      - oncall.sre@acme.example
+      - ic.oncall@acme.example
+
+# ---------------------------------------------------------------------------
+# Risk levels
+# ---------------------------------------------------------------------------
+
+risk_levels:
+  HIGH:
+    requires_dual_approval: true
+    requires_change_ticket: true
+  MEDIUM:
+    requires_change_ticket: true
+  LOW: {}
+
+# ---------------------------------------------------------------------------
+# Action rules
+# ---------------------------------------------------------------------------
+
+rules:
+
+  # -- deployment.production.execute -----------------------------------------
+  # V1 migration: production.deploy → deployment.production.execute
+  - action: deployment.production.execute
+    description: >
+      Deploy a service to the production environment. Requires a change ticket.
+      HIGH risk deployments additionally require dual approval. This action
+      supersedes the V1 production.deploy action string.
+    require:
+      all:
+        - field: context.buildSha
+          op: present
+          error: "missing required field: buildSha"
+        - field: context.changeTicket
+          op: present
+          error: "DENY_MISSING_CHANGE_TICKET: production deployment requires changeTicket"
+        - field: context.changeTicket
+          op: not_empty
+          error: "DENY_MISSING_CHANGE_TICKET: changeTicket may not be empty"
+        - field: context.approvedBy
+          op: present
+          error: "missing required field: approvedBy"
+        - field: context.rollbackPlan
+          op: present
+          error: "missing required field: rollbackPlan"
+    conditional:
+      - if:
+          field: context.riskLevel
+          op: eq
+          value: HIGH
+        then:
+          require:
+            field: context.secondApprovedBy
+            op: present
+            error: "DENY_DUAL_APPROVER_MISSING: HIGH risk deployment requires dual approval (secondApprovedBy)"
+    decision: allow
+
+  # -- deployment.staging.execute --------------------------------------------
+  - action: deployment.staging.execute
+    description: >
+      Deploy a service to the staging environment. Requires on-call engineer
+      approval or higher.
+    require:
+      all:
+        - field: context.buildSha
+          op: present
+          error: "missing required field: buildSha"
+        - field: context.approvedBy
+          op: present
+          error: "missing required field: approvedBy"
+    decision: allow
+
+  # -- deployment.rollback.execute -------------------------------------------
+  - action: deployment.rollback.execute
+    description: >
+      Roll back a production deployment to a previous known-good version.
+      Fail-closed: requires incident commander role and a linked incident ID.
+      If AtlaSent is unavailable, rollback is blocked.
+    machine_executable: false
+    require:
+      all:
+        - field: context.incidentId
+          op: present
+          error: "missing required field: incidentId"
+        - field: context.rollbackTarget
+          op: present
+          error: "missing required field: rollbackTarget"
+        - field: context.authorizedBy
+          op: present
+          error: "missing required field: authorizedBy"
+        - field: context.authorizedBy
+          op: in_role
+          role: incident_commander
+          error: "DENY_AUTHORITY: authorizedBy does not have incident_commander role required for rollback"
+        - field: context.reason
+          op: present
+          error: "missing required field: reason"
+    decision: allow
+
+# ---------------------------------------------------------------------------
+# Audit
+# ---------------------------------------------------------------------------
+
+audit:
+  chain: sha256_linked           # SHA-256 hash-linked, append-only
+  signing: ed25519               # Ed25519-signed on export
+  export_schedule: "0 2 * * *"   # nightly export at 02:00 UTC
+  retention_days: 2555           # 7 years (SOX / change management)
+
+# ---------------------------------------------------------------------------
+# Webhooks
+# ---------------------------------------------------------------------------
+
+webhooks:
+  deployment_notify:
+    url: "${DEPLOY_WEBHOOK_URL}/atlasent/webhook"
+    events:
+      - decision.allow
+      - decision.deny
+    secret_env: ATLASENT_WEBHOOK_SECRET
+    retry:
+      max_attempts: 5
+      backoff: exponential

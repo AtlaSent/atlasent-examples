@@ -1,0 +1,241 @@
+name: E2E smoke (flows vs staging)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'flows/**'
+      - 'regulated/**'
+      - '.github/workflows/e2e-smoke.yml'
+  pull_request:
+    paths:
+      - 'flows/**'
+      - 'regulated/**'
+      - '.github/workflows/e2e-smoke.yml'
+  schedule:
+    - cron: '0 13 * * *'  # 13:00 UTC daily
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Gate the live API-dependent job on the presence of staging
+  # credentials. Without this, PRs from branches that can't see the
+  # secrets (or runs while staging is rotating) red-fail the whole
+  # workflow with no signal about whether the change itself is sound.
+  # Mirrors the `Check if staging key is configured` pattern used in
+  # the atlasent-sdk repo's CI.
+  check-staging-creds:
+    name: Check if staging credentials are configured
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    outputs:
+      configured: ${{ steps.set-output.outputs.configured }}
+    steps:
+      - id: probe
+        env:
+          KEY: ${{ secrets.ATLASENT_STAGING_API_KEY }}
+          URL: ${{ secrets.ATLASENT_STAGING_API_URL }}
+        run: |
+          # Fail-fast: secret must be present and non-empty.
+          if [ -z "$KEY" ] || [ -z "$URL" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=e2e-smoke skipped::Staging credentials not configured for this run. The live flow-01 OIDC gate will be skipped; offline checks still run. Narrative, wire-contract, syntax, config, and offline boundary checks still run."
+            exit 0
+          fi
+          # Authenticated contract probe: the deliberately incomplete body
+          # should reach request validation (normally HTTP 400). A 401/403
+          # means the key is absent, expired, or lacks access. The bearer value
+          # is never printed and GitHub masks the repository secret.
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            --max-time 10 \
+            -H "Authorization: Bearer $KEY" \
+            "${URL%/}/v1-evaluate" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -d '{"_probe":true}' 2>/dev/null) || HTTP_CODE="000"
+          if [ "$HTTP_CODE" = "400" ]; then
+            echo "configured=true"  >> "$GITHUB_OUTPUT"
+            echo "Staging credentials reached authenticated request validation (HTTP 400)."
+          elif [ "$HTTP_CODE" = "401" ] || [ "$HTTP_CODE" = "403" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=e2e-smoke skipped::Staging API returned HTTP $HTTP_CODE — key is absent, invalid, expired, or insufficiently scoped. The live flow-01 OIDC gate will be skipped until a working key is provisioned."
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=e2e-smoke skipped::Staging API probe returned unexpected HTTP $HTTP_CODE instead of authenticated validation HTTP 400. The live flow-01 OIDC gate will be skipped."
+          fi
+
+      - name: Validate key format
+        id: validate
+        run: |
+          import re, os, sys
+          key = os.environ.get('ATLASENT_API_KEY', '')
+          if not re.match(r'^ask_(live|test)_', key):
+            print('Key does not match ask_(live|test)_<entropy> format')
+            sys.exit(1)
+        shell: python3 {0}
+        env:
+          ATLASENT_API_KEY: ${{ secrets.ATLASENT_STAGING_API_KEY }}
+        continue-on-error: true
+
+      - name: Set configured output
+        id: set-output
+        env:
+          PROBE_RESULT: ${{ steps.probe.outputs.configured }}
+          VALIDATE_RESULT: ${{ steps.validate.outcome }}
+        run: |
+          if [ "$PROBE_RESULT" = "true" ] && [ "$VALIDATE_RESULT" = "success" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "Credentials reached staging and the live OIDC gate may run."
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            if [ "$PROBE_RESULT" != "true" ]; then
+              echo "::notice title=e2e-smoke skipped::Staging credentials not configured for this run. The live flow-01 OIDC gate will be skipped; offline checks still run. Narrative, wire-contract, syntax, config, and offline boundary checks still run."
+            else
+              echo "::notice title=e2e-smoke skipped::Staging API key is present but has an invalid format (expected ask_live_<entropy> or ask_test_<entropy>). The live flow-01 OIDC gate will be skipped."
+            fi
+          fi
+
+  flow-00-golden-path:
+    name: 00 · golden-path (offline narrative)
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: flows/00-golden-path/package.json
+      - name: Install
+        working-directory: flows/00-golden-path
+        run: npm install --no-audit --no-fund
+      - name: Rehearse fixed narrative
+        working-directory: flows/00-golden-path
+        run: GOLDEN_PATH_PACE_MS=0 npm run dry-run
+
+  flow-01-deploy-gate-contract:
+    name: 01 · deploy-gate (offline wire contract)
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: flows/01-deploy-gate/package.json
+      - name: Install
+        working-directory: flows/01-deploy-gate
+        run: npm install --no-audit --no-fund
+      - name: Contract test
+        working-directory: flows/01-deploy-gate
+        run: npm run typecheck && npm test
+
+  flow-01-deploy-gate-live:
+    name: 01 · deploy-gate (live brokered OIDC)
+    needs: [check-staging-creds, flow-01-deploy-gate-contract]
+    if: needs.check-staging-creds.outputs.configured == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    environment: staging
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Evaluate and verify against staging
+        id: staging-gate
+        uses: Atlasent/atlasent-action@1e4a10f349e6eaf326219b7a22b3a6603cb37ab8
+        env:
+          ATLASENT_API_KEY: ${{ secrets.ATLASENT_STAGING_API_KEY }}
+          ATLASENT_BASE_URL: ${{ secrets.ATLASENT_STAGING_API_URL }}
+        with:
+          action: production.deploy
+          environment: staging
+          target-id: checkout-api
+          approvals-from: none
+          pr-comment-on-deny: 'false'
+      - name: Assert an ALLOW was permit-verified
+        env:
+          DECISION: ${{ steps.staging-gate.outputs.decision }}
+          VERIFIED: ${{ steps.staging-gate.outputs.verified }}
+        run: |
+          if [ "$DECISION" != "allow" ] || [ "$VERIFIED" != "true" ]; then
+            echo "::error::staging gate did not return allow + verified=true"
+            exit 1
+          fi
+
+  flow-02-lims-write:
+    name: 02 · lims-write (syntax only; live mapping pending)
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - name: Compile
+        working-directory: regulated/lims-write
+        run: python3 -m py_compile main.py
+
+  flow-03-clinical-data-export:
+    name: 03 · clinical-data-export (syntax only; live mapping pending)
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - name: Compile
+        working-directory: regulated/clinical-data-export
+        run: python3 -m py_compile main.py
+
+  flow-04-mcp-claude-code:
+    name: 04 · mcp-claude-code (config lint only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate .mcp.json
+        run: |
+          python3 -c "import json,sys; cfg=json.load(open('flows/04-mcp-claude-code/.mcp.json'));
+          assert 'atlasent' in cfg['mcpServers'], 'missing atlasent MCP server';
+          assert '@atlasent/mcp-server' in cfg['mcpServers']['atlasent']['args'], 'wrong package';
+          print('ok')"
+
+  flow-05-langchain-clinical-agent:
+    name: 05 · langchain-clinical-agent (syntax only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - name: Compile
+        working-directory: regulated/langchain-clinical-agent
+        run: python3 -m py_compile main.py
+
+  flow-06-network-down-fail-closed:
+    name: 06 · network-down fail-closed (boundary regression)
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    # No staging credentials needed — this flow points at an
+    # unreachable host on purpose. Runs deterministically offline.
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: flows/06-network-down-fail-closed/package.json
+      - name: Install
+        working-directory: flows/06-network-down-fail-closed
+        run: npm install --no-audit --no-fund
+      - name: Run
+        working-directory: flows/06-network-down-fail-closed
+        # Exit 0 = boundary verified; 2 / 3 = fail-closed regression.
+        run: npm start

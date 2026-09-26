@@ -1,0 +1,67 @@
+name: Agent Tool Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      tool_name:
+        description: 'Tool to execute (e.g., bash, read_file)'
+        required: true
+      tool_args:
+        description: 'JSON-encoded tool arguments'
+        required: true
+
+jobs:
+  agent-tool-gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      ATLASENT_API_KEY: ${{ secrets.ATLASENT_KEY }}
+      ATLASENT_API_URL: ${{ secrets.ATLASENT_API_URL || 'https://api.atlasent.io/functions/v1' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Evaluate tool call
+        id: evaluate
+        run: npx tsx src/evaluate.ts
+        env:
+          ATLASENT_KEY: ${{ secrets.ATLASENT_KEY }}
+          TOOL_NAME: ${{ inputs.tool_name }}
+          TOOL_ARGS: ${{ inputs.tool_args }}
+          AGENT_ID: ${{ github.actor }}
+          SESSION_ID: ${{ github.run_id }}
+
+      - name: Execute tool (if permitted)
+        if: steps.evaluate.outputs.decision == 'ALLOW'
+        run: npx tsx src/execute.ts
+        env:
+          TOOL_NAME: ${{ inputs.tool_name }}
+          TOOL_ARGS: ${{ inputs.tool_args }}
+          PERMIT_ID: ${{ steps.evaluate.outputs.permit_id }}
+
+      - name: Consume permit
+        if: always()
+        run: npx tsx src/consume.ts
+        env:
+          PERMIT_ID: ${{ steps.evaluate.outputs.permit_id }}
+          ATLASENT_KEY: ${{ secrets.ATLASENT_KEY }}
+          DECISION: ${{ steps.evaluate.outputs.decision }}
+
+      - name: Audit evidence
+        if: always()
+        run: |
+          echo "tool_name=${{ inputs.tool_name }}"
+          echo "agent_id=${{ github.actor }}"
+          echo "session_id=${{ github.run_id }}"
+          echo "decision=${{ steps.evaluate.outputs.decision }}"
+          echo "permit_id=${{ steps.evaluate.outputs.permit_id }}"
+          echo "audit_hash=${{ steps.evaluate.outputs.audit_hash }}"
+          echo "reason=${{ steps.evaluate.outputs.reason }}"

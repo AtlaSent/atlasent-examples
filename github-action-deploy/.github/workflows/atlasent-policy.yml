@@ -1,0 +1,55 @@
+name: AtlaSent Policy Gate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "policies/**"
+  pull_request:
+    paths:
+      - "policies/**"
+
+jobs:
+  validate:
+    name: Lint & Plan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install AtlaSent CLI
+        run: npm install -g @atlasent/cli
+
+      - name: Lint policies
+        run: atlasent-policy validate policies/
+
+      - name: Plan (show drift vs live)
+        if: github.event_name == 'pull_request'
+        run: atlasent-policy plan policies/
+        env:
+          ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
+          ATLASENT_BASE_URL: ${{ vars.ATLASENT_BASE_URL }}
+
+  apply:
+    name: Apply Policies
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install AtlaSent CLI
+        run: npm install -g @atlasent/cli
+
+      - name: Apply policies
+        run: atlasent-policy apply policies/
+        env:
+          ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
+          ATLASENT_BASE_URL: ${{ vars.ATLASENT_BASE_URL }}

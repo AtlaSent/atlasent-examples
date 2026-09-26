@@ -1,0 +1,12 @@
+{
+  "name": "gxp-hipaa-phi-access",
+  "version": "0.1.0",
+  "private": true,
+  "description": "HIPAA ePHI access authorization demo using AtlaSent",
+  "scripts": {
+    "start": "npx tsx main.ts"
+  },
+  "dependencies": {
+    "@atlasent/sdk": "2.10.0"
+  }
+}

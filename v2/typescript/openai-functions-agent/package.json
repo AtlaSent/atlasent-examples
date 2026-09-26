@@ -1,0 +1,17 @@
+{
+  "name": "atlasent-example-openai-functions-agent",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx index.ts",
+    "smoke": "ATLASENT_DRY_RUN=true tsx index.ts"
+  },
+  "dependencies": {
+    "@atlasent/sdk": "^2.0.0",
+    "openai": "^4.95.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.3",
+    "typescript": "^5.4.5"
+  }
+}

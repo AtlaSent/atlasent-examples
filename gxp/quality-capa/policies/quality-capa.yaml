@@ -1,0 +1,219 @@
+# quality-capa.yaml
+#
+# AtlaSent policy bundle for GxP quality CAPA lifecycle authorization.
+# Load into the AtlaSent engine via the console or the API:
+#
+# NOTE: v1-policy-bundles is disabled in production and will return 404.
+# See atlasent-api/supabase/runtime-functions-disabled.json.
+# Use the AtlaSent Console UI to load policy bundles instead.
+#   curl -X POST https://api.atlasent.io/functions/v1/v1-policy-bundles \
+#     -H "Authorization: Bearer $ATLASENT_API_KEY" \
+#     -H "Content-Type: application/yaml" \
+#     --data-binary @policies/quality-capa.yaml
+#
+# Regulatory references:
+#   21 CFR Part 820.100  — CAPA procedures (QSR)
+#   21 CFR Part 211.192  — Production record review
+#   ISO 13485:2016 §8.5  — Improvement / CAPA
+#   ICH Q10 §3.2.3       — CAPA system
+
+id: quality-capa
+version: "1.0.0"
+description: >
+  Fail-closed authorization policy for the full CAPA lifecycle.
+  Initiation requires qa_manager role. Closure requires dual approval.
+  Effectiveness checks require qa_manager and 90-day minimum since creation.
+  All decisions are audit-logged with SHA-256 hash chain for 21 CFR Part 11
+  and ISO 13485 compliance.
+
+# ---------------------------------------------------------------------------
+# Global configuration
+# ---------------------------------------------------------------------------
+
+config:
+  fail_closed: true            # transport / evaluation errors -> deny
+  audit_all_decisions: true    # record allow AND deny to the audit chain
+  permit_ttl_seconds: 900      # single-use permits expire after 15 minutes
+
+# ---------------------------------------------------------------------------
+# Role definitions
+# ---------------------------------------------------------------------------
+
+roles:
+  qa_manager:
+    members:
+      - qa.mgr@pharma.example
+      - qa.director@pharma.example
+
+  qa_staff:
+    members:
+      - qa.mgr@pharma.example
+      - qa.director@pharma.example
+      - qa.lead@pharma.example
+
+# ---------------------------------------------------------------------------
+# Thresholds
+# ---------------------------------------------------------------------------
+
+thresholds:
+  effectiveness_check_min_days: 90   # minimum days since CAPA initiation before effectiveness check
+
+# ---------------------------------------------------------------------------
+# Action rules
+# ---------------------------------------------------------------------------
+
+rules:
+
+  # -- quality.capa.initiate -------------------------------------------------
+  - action: quality.capa.initiate
+    description: >
+      Initiate a new CAPA. Requires qa_manager role to ensure only qualified
+      QA personnel can open corrective/preventive action records.
+    require:
+      all:
+        - field: context.capaId
+          op: present
+          error: "missing required field: capaId"
+        - field: context.initiatedBy
+          op: present
+          error: "missing required field: initiatedBy"
+        - field: context.initiatedBy
+          op: in_role
+          role: qa_manager
+          error: "DENY_AUTHORITY: initiatedBy does not have qa_manager role required to initiate a CAPA"
+        - field: context.source
+          op: present
+          error: "missing required field: source"
+        - field: context.severity
+          op: present
+          error: "missing required field: severity"
+    decision: allow
+
+  # -- quality.capa.assign ---------------------------------------------------
+  - action: quality.capa.assign
+    description: >
+      Assign a CAPA to an owner. Requires qa_staff membership.
+    require:
+      all:
+        - field: context.capaId
+          op: present
+          error: "missing required field: capaId"
+        - field: context.assignedBy
+          op: present
+          error: "missing required field: assignedBy"
+        - field: context.assignedBy
+          op: in_role
+          role: qa_staff
+          error: "DENY_AUTHORITY: assignedBy is not authorized to assign CAPA tasks"
+        - field: context.assignedTo
+          op: present
+          error: "missing required field: assignedTo"
+        - field: context.dueDate
+          op: present
+          error: "missing required field: dueDate"
+    decision: allow
+
+  # -- quality.capa.progress -------------------------------------------------
+  - action: quality.capa.progress
+    description: >
+      Record a progress update on an open CAPA. Any authenticated staff member
+      may submit progress notes; capaId and updatedBy are required.
+    require:
+      all:
+        - field: context.capaId
+          op: present
+          error: "missing required field: capaId"
+        - field: context.updatedBy
+          op: present
+          error: "missing required field: updatedBy"
+        - field: context.progressNote
+          op: present
+          error: "missing required field: progressNote"
+        - field: context.percentComplete
+          op: present
+          error: "missing required field: percentComplete"
+    decision: allow
+
+  # -- quality.capa.effectiveness_check -------------------------------------
+  - action: quality.capa.effectiveness_check
+    description: >
+      Perform the 90-day effectiveness verification. Requires qa_manager role
+      and minimum 90 days since CAPA initiation per ICH Q10 guidance.
+    require:
+      all:
+        - field: context.capaId
+          op: present
+          error: "missing required field: capaId"
+        - field: context.checkedBy
+          op: present
+          error: "missing required field: checkedBy"
+        - field: context.checkedBy
+          op: in_role
+          role: qa_manager
+          error: "DENY_AUTHORITY: checkedBy does not have qa_manager role required for effectiveness check"
+        - field: context.effectivenessScore
+          op: present
+          error: "missing required field: effectivenessScore"
+        - field: context.evidenceUri
+          op: present
+          error: "missing required field: evidenceUri"
+    decision: allow
+
+  # -- quality.capa.close ----------------------------------------------------
+  - action: quality.capa.close
+    description: >
+      Permanently close a CAPA. Requires dual approval: closedBy and
+      secondClosedBy must be distinct, both in qa_staff.
+      Closure rationale is mandatory for audit trail purposes.
+    require:
+      all:
+        - field: context.capaId
+          op: present
+          error: "DENY_DUAL_APPROVER_MISSING: missing required field: capaId"
+        - field: context.closedBy
+          op: present
+          error: "DENY_DUAL_APPROVER_MISSING: missing required field: closedBy"
+        - field: context.secondClosedBy
+          op: present
+          error: "DENY_DUAL_APPROVER_MISSING: CAPA closure requires dual approval — secondClosedBy is absent"
+        - field: context.closedBy
+          op: ne_field
+          compare_field: context.secondClosedBy
+          error: "DENY_DUAL_APPROVER_MISSING: closedBy and secondClosedBy must be distinct individuals"
+        - field: context.closedBy
+          op: in_role
+          role: qa_staff
+          error: "DENY_AUTHORITY: closedBy is not authorized to close a CAPA"
+        - field: context.secondClosedBy
+          op: in_role
+          role: qa_staff
+          error: "DENY_AUTHORITY: secondClosedBy is not authorized to provide second closure sign-off"
+        - field: context.closureRationale
+          op: present
+          error: "missing required field: closureRationale"
+    decision: allow
+
+# ---------------------------------------------------------------------------
+# Audit
+# ---------------------------------------------------------------------------
+
+audit:
+  chain: sha256_linked           # SHA-256 hash-linked, append-only
+  signing: ed25519               # Ed25519-signed on export
+  export_schedule: "0 2 * * *"   # nightly export at 02:00 UTC
+  retention_days: 3650           # 10 years (21 CFR Part 820 / ISO 13485)
+
+# ---------------------------------------------------------------------------
+# Webhooks
+# ---------------------------------------------------------------------------
+
+webhooks:
+  decision_notify:
+    url: "${QMS_WEBHOOK_URL}/atlasent/webhook"
+    events:
+      - decision.allow
+      - decision.deny
+    secret_env: ATLASENT_WEBHOOK_SECRET
+    retry:
+      max_attempts: 5
+      backoff: exponential

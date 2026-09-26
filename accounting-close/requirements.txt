@@ -1,0 +1,9 @@
+# Full demo (main.py, vendor-master.py, emergency-override.py) requires the
+# atlasent SDK (provides AtlaSentClient, StubTransport, atlasent.audit).
+atlasent==2.10.0
+
+# Offline audit-bundle export and verification (main.py --export and
+# verify-audit.py --bundle) require Ed25519 from `cryptography`.
+# No atlasent SDK or network needed for offline verification — an
+# auditor's laptop can verify a delivered bundle with just `cryptography`.
+cryptography>=41

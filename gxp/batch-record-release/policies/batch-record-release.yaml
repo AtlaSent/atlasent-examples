@@ -1,0 +1,116 @@
+# batch-record-release.yaml
+#
+# AtlaSent policy bundle for GxP manufacturing batch record release.
+# Load into the AtlaSent engine via the console or the API:
+#
+# NOTE: v1-policy-bundles is disabled in production and will return 404.
+# See atlasent-api/supabase/runtime-functions-disabled.json.
+# Use the AtlaSent Console UI to load policy bundles instead.
+#   curl -X POST https://api.atlasent.io/functions/v1/v1-policy-bundles \
+#     -H "Authorization: Bearer $ATLASENT_API_KEY" \
+#     -H "Content-Type: application/yaml" \
+#     --data-binary @policies/batch-record-release.yaml
+#
+# Regulatory references:
+#   21 CFR Part 211.192 — Production record review
+#   21 CFR Part 211.68  — Automatic, mechanical, and electronic equipment
+#   EU GMP Annex 11     — Computerised systems
+#   ICH Q10             — Pharmaceutical quality system
+
+id: batch-record-release
+version: "1.0.0"
+description: >
+  Fail-closed authorization policy for GxP manufacturing batch record release.
+  Enforces dual QA signatory approval, batch record completeness, and
+  electronic sign-off requirements before a batch may be released for
+  distribution. Machine-executable is false: a human QA decision is always
+  required.
+
+# ---------------------------------------------------------------------------
+# Global configuration
+# ---------------------------------------------------------------------------
+
+config:
+  fail_closed: true            # transport / evaluation errors -> deny
+  machine_executable: false    # AI agents cannot auto-approve; human QA required
+  audit_all_decisions: true    # record allow AND deny to the audit chain
+  permit_ttl_seconds: 900      # single-use permits expire after 15 minutes
+
+# ---------------------------------------------------------------------------
+# Actor lists
+# ---------------------------------------------------------------------------
+
+lists:
+  authorized_qa_signatories:
+    - qa.mgr@pharma.example
+    - qa.lead@pharma.example
+    - qp.europe@pharma.example
+
+# ---------------------------------------------------------------------------
+# Action rules
+# ---------------------------------------------------------------------------
+
+rules:
+
+  # -- manufacturing.batch_record.release ------------------------------------
+  - action: manufacturing.batch_record.release
+    description: >
+      Release a manufactured batch for distribution after QA review.
+      Requires a complete batch record and dual QA signatory approval.
+    machine_executable: false
+    require:
+      all:
+        - field: context.batchId
+          op: present
+          error: "DENY_BATCH_RECORD_INCOMPLETE: missing required field: batchId"
+        - field: context.productCode
+          op: present
+          error: "DENY_BATCH_RECORD_INCOMPLETE: missing required field: productCode"
+        - field: context.certifiedBy
+          op: present
+          error: "DENY_BATCH_RECORD_INCOMPLETE: missing required field: certifiedBy"
+        - field: context.batchRecordComplete
+          op: eq
+          value: true
+          error: "DENY_BATCH_RECORD_INCOMPLETE: batch record must be complete before release"
+        - field: context.qaSignoffBy
+          op: present
+          error: "DENY_DUAL_APPROVER_MISSING: qaSignoffBy is absent; dual QA sign-off required"
+        - field: context.certifiedBy
+          op: in_list
+          list: authorized_qa_signatories
+          error: "DENY_DUAL_APPROVER_MISSING: certifiedBy is not on the authorized QA signatory list"
+        - field: context.qaSignoffBy
+          op: in_list
+          list: authorized_qa_signatories
+          error: "DENY_DUAL_APPROVER_MISSING: qaSignoffBy is not on the authorized QA signatory list"
+        - field: context.certifiedBy
+          op: ne_field
+          compare_field: context.qaSignoffBy
+          error: "DENY_DUAL_APPROVER_MISSING: certifiedBy and qaSignoffBy must be distinct individuals"
+    decision: allow
+
+# ---------------------------------------------------------------------------
+# Audit
+# ---------------------------------------------------------------------------
+
+audit:
+  chain: sha256_linked          # SHA-256 hash-linked, append-only
+  signing: ed25519              # Ed25519-signed on export
+  export_schedule: "0 2 * * *"  # nightly export at 02:00 UTC
+  retention_days: 3650          # 10 years (21 CFR Part 211.68 / EU GMP)
+
+# ---------------------------------------------------------------------------
+# Webhooks
+# ---------------------------------------------------------------------------
+
+webhooks:
+  decision_notify:
+    url: "${MFG_WEBHOOK_URL}/atlasent/webhook"
+    events:
+      - decision.allow
+      - decision.deny
+    secret_env: ATLASENT_WEBHOOK_SECRET
+    retry:
+      max_attempts: 5
+      backoff: exponential

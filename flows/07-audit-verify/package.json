@@ -1,0 +1,19 @@
+{
+  "name": "atlasent-flow-07-audit-verify",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "tsx verify.ts"
+  },
+  "dependencies": {
+    "@atlasent/sdk": "2.10.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.3",
+    "typescript": "^5.4.5"
+  }
+}

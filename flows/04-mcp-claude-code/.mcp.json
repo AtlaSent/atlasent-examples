@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "atlasent": {
+      "command": "npx",
+      "args": ["-y", "@atlasent/mcp-server"],
+      "env": {
+        "ATLASENT_API_KEY": "${ATLASENT_API_KEY}",
+        "ATLASENT_API_URL": "${ATLASENT_API_URL:-https://staging.atlasent.dev/functions/v1}"
+      }
+    }
+  }
+}

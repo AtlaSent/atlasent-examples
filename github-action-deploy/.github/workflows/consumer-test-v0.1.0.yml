@@ -1,0 +1,134 @@
+name: Consumer test — atlasent-action v0.1.0 vs v1.0.0 baseline
+
+# Manual-only trigger. This workflow runs the AtlaSent action twice
+# in parallel — once at the existing public v1.0.0 tag (the
+# baseline), once at the candidate SHA from atlasent-action PR #30
+# (the proposed v0.1.0 release) — and reports the side-by-side
+# decision / verified / permit-token outputs.
+#
+# Goal: confirm that any consumer pinning @v1.0.0 today gets
+# equivalent behavior on @v0.1.0 BEFORE we delete the v1.0.0 tag
+# and cut the v0.1.0 GitHub Release.
+#
+# After atlasent-action PR #30 merges:
+#   - update CANDIDATE_REF below to the v0.1.0 tag (or leave the
+#     SHA — both work).
+# After consumer test passes:
+#   - delete the v1.0.0 tag from origin
+#   - delete the v1.0.0 GitHub Release in the UI
+#   - cut the v0.1.0 GitHub Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_ref:
+        description: 'Git ref for the candidate (defaults to atlasent-action PR #30 HEAD).'
+        required: false
+        default: '4d99c34d5dc20f935f41e912eab502d451b91bb2'
+      baseline_ref:
+        description: 'Git ref for the baseline (defaults to the existing v1.0.0 tag).'
+        required: false
+        default: 'v1.0.0'
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    name: Baseline (atlasent-action @ v1.0.0)
+    runs-on: ubuntu-latest
+    outputs:
+      decision: ${{ steps.gate.outputs.decision }}
+      verified: ${{ steps.gate.outputs.verified }}
+      permit_token: ${{ steps.gate.outputs.permit-token }}
+      decision_id: ${{ steps.gate.outputs.decision-id }}
+      audit_hash: ${{ steps.gate.outputs.audit-hash }}
+    steps:
+      - name: AtlaSent gate (baseline @v1.0.0)
+        id: gate
+        uses: atlasent-systems-inc/atlasent-action@v1.0.0
+        with:
+          api-key: ${{ secrets.ATLASENT_API_KEY }}
+          agent: consumer-test
+          action: deploy:staging
+          bundle-id: "${{ vars.ATLASENT_BUNDLE_ID }}"
+          context: |
+            {
+              "actor": "${{ github.actor }}",
+              "ref": "${{ github.ref }}",
+              "sha": "${{ github.sha }}",
+              "candidate": "baseline"
+            }
+
+  candidate:
+    name: Candidate (atlasent-action @ PR #30)
+    runs-on: ubuntu-latest
+    outputs:
+      decision: ${{ steps.gate.outputs.decision }}
+      verified: ${{ steps.gate.outputs.verified }}
+      permit_token: ${{ steps.gate.outputs.permit-token }}
+      decision_id: ${{ steps.gate.outputs.decision-id }}
+      audit_hash: ${{ steps.gate.outputs.audit-hash }}
+      risk_score: ${{ steps.gate.outputs.risk-score }}
+    steps:
+      - name: AtlaSent gate (candidate @ PR #30)
+        id: gate
+        # Pin to a SHA so the test result is reproducible. Update via
+        # workflow_dispatch input if you need a different ref.
+        uses: atlasent-systems-inc/atlasent-action@4d99c34d5dc20f935f41e912eab502d451b91bb2
+        with:
+          api-key: ${{ secrets.ATLASENT_API_KEY }}
+          agent: consumer-test
+          action: deploy:staging
+          bundle-id: "${{ vars.ATLASENT_BUNDLE_ID }}"
+          context: |
+            {
+              "actor": "${{ github.actor }}",
+              "ref": "${{ github.ref }}",
+              "sha": "${{ github.sha }}",
+              "candidate": "v0.1.0-rc"
+            }
+
+  compare:
+    name: Compare baseline vs candidate
+    needs: [baseline, candidate]
+    runs-on: ubuntu-latest
+    if: always()  # run even if either job failed, so we report what each produced
+    steps:
+      - name: Render comparison table
+        run: |
+          {
+            echo "## Consumer test — baseline vs candidate"
+            echo
+            echo "| Output | Baseline (v1.0.0) | Candidate (PR #30 / v0.1.0) |"
+            echo "|---|---|---|"
+            echo "| decision | \`${{ needs.baseline.outputs.decision || 'MISSING' }}\` | \`${{ needs.candidate.outputs.decision || 'MISSING' }}\` |"
+            echo "| verified | \`${{ needs.baseline.outputs.verified || 'MISSING' }}\` | \`${{ needs.candidate.outputs.verified || 'MISSING' }}\` |"
+            echo "| permit-token (presence) | $( [ -n '${{ needs.baseline.outputs.permit_token }}' ] && echo '✅ present' || echo '❌ empty' ) | $( [ -n '${{ needs.candidate.outputs.permit_token }}' ] && echo '✅ present' || echo '❌ empty' ) |"
+            echo "| decision-id (presence) | $( [ -n '${{ needs.baseline.outputs.decision_id }}' ] && echo '✅ present' || echo '❌ empty' ) | $( [ -n '${{ needs.candidate.outputs.decision_id }}' ] && echo '✅ present' || echo '❌ empty' ) |"
+            echo "| audit-hash (presence) | $( [ -n '${{ needs.baseline.outputs.audit_hash }}' ] && echo '✅ present' || echo '❌ empty' ) | $( [ -n '${{ needs.candidate.outputs.audit_hash }}' ] && echo '✅ present' || echo '❌ empty' ) |"
+            echo "| risk-score (new in v0.1.0) | n/a | \`${{ needs.candidate.outputs.risk_score || '(empty — server didn'\''t emit)' }}\` |"
+            echo
+            echo "## Pass criteria"
+            echo
+            echo "- Both jobs report \`decision: ALLOW\` (or both report the same non-allow value)."
+            echo "- Both jobs report \`verified: true\` (or both report \`verified: false\` for the same reason)."
+            echo "- Candidate emits at least the same outputs as baseline; **new** outputs (\`risk-score\`) appear without breaking."
+            echo "- Server-side audit log shows two distinct evaluate→verify pairs (different \`decision-id\`s)."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail if decision diverges
+        run: |
+          baseline="${{ needs.baseline.outputs.decision }}"
+          candidate="${{ needs.candidate.outputs.decision }}"
+          if [ "$baseline" != "$candidate" ]; then
+            echo "::error::decision divergence — baseline=$baseline candidate=$candidate"
+            exit 1
+          fi
+          baseline_v="${{ needs.baseline.outputs.verified }}"
+          candidate_v="${{ needs.candidate.outputs.verified }}"
+          if [ "$baseline_v" != "$candidate_v" ]; then
+            echo "::error::verified divergence — baseline=$baseline_v candidate=$candidate_v"
+            exit 1
+          fi
+          echo "✅ baseline and candidate agree on decision=$baseline and verified=$baseline_v"

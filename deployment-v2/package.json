@@ -1,0 +1,19 @@
+{
+  "name": "deployment-v2",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "AtlaSent deployment V2 authorization demo",
+  "scripts": {
+    "start": "python rollback.py",
+    "mock": "npx @atlasent/sdk mock"
+  },
+  "dependencies": {
+    "@atlasent/sdk": "2.10.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.41",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}

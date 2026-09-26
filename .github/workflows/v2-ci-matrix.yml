@@ -1,0 +1,137 @@
+# Wave C.E3 — v2 CI matrix.
+#
+# Runs each v2/* example against a sandbox project on push and PR.
+# Sandbox API URL + key are read from GitHub Actions secrets:
+#   ATLASENT_SANDBOX_API_URL
+#   ATLASENT_SANDBOX_API_KEY
+#
+# Each cell runs with both `ATLASENT_V2_BATCH=false` (v1 fallback) and
+# `=true` (v2 path) so we catch divergence between paths early.
+#
+# Secrets cannot be referenced directly in step-level `if:` conditions
+# (doing so fails the run at startup in contexts without secret access,
+# e.g. Dependabot runs). We hoist the presence check into a job-level
+# `env:` boolean and gate the live-run steps on it instead.
+
+name: v2 example matrix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'v2/**'
+      - '.github/workflows/v2-ci-matrix.yml'
+  pull_request:
+    paths:
+      - 'v2/**'
+      - '.github/workflows/v2-ci-matrix.yml'
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    env:
+      HAS_SANDBOX: ${{ secrets.ATLASENT_SANDBOX_API_KEY != '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        v2_batch: ['false', 'true']
+        example:
+          - authorize_many
+          - evaluate_basic
+          - openai-functions-agent
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install
+        run: |
+          if [ -f "v2/python/${{ matrix.example }}/requirements.txt" ]; then
+            pip install -r "v2/python/${{ matrix.example }}/requirements.txt"
+          else
+            pip install httpx
+          fi
+      - name: Run
+        if: ${{ env.HAS_SANDBOX == 'true' }}
+        env:
+          ATLASENT_API_URL: ${{ secrets.ATLASENT_SANDBOX_API_URL }}
+          ATLASENT_API_KEY: ${{ secrets.ATLASENT_SANDBOX_API_KEY }}
+          ATLASENT_V2_BATCH: ${{ matrix.v2_batch }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_SANDBOX_KEY }}
+        run: |
+          path="v2/python/${{ matrix.example }}"
+          if [ -d "$path" ]; then
+            cd "$path"
+            # Run any test_*.py files as tests first -- `python *.py` alone
+            # would pass a test file's name as an argv to whichever script
+            # sorts first instead of ever executing it as its own run.
+            for f in test_*.py; do
+              [ -f "$f" ] && python "$f"
+            done
+            for f in *.py; do
+              case "$f" in
+                test_*.py) ;;
+                *) python "$f" ;;
+              esac
+            done
+          else
+            python "v2/python/${{ matrix.example }}.py"
+          fi
+
+  typescript:
+    runs-on: ubuntu-latest
+    env:
+      HAS_SANDBOX: ${{ secrets.ATLASENT_SANDBOX_API_KEY != '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        v2_batch: ['false', 'true']
+        example:
+          - authorize-many
+          - evaluate-basic
+          - openai-functions-agent
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+      - name: Install
+        run: |
+          if [ -d "v2/typescript/${{ matrix.example }}" ]; then
+            cd "v2/typescript/${{ matrix.example }}" && bun install
+          fi
+      - name: Run
+        if: ${{ env.HAS_SANDBOX == 'true' }}
+        env:
+          ATLASENT_API_URL: ${{ secrets.ATLASENT_SANDBOX_API_URL }}
+          ATLASENT_API_KEY: ${{ secrets.ATLASENT_SANDBOX_API_KEY }}
+          ATLASENT_V2_BATCH: ${{ matrix.v2_batch }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_SANDBOX_KEY }}
+        run: |
+          path="v2/typescript/${{ matrix.example }}"
+          if [ -d "$path" ]; then
+            cd "$path" && bun run index.ts
+          else
+            bun run "v2/typescript/${{ matrix.example }}.ts"
+          fi
+
+  go:
+    runs-on: ubuntu-latest
+    env:
+      HAS_SANDBOX: ${{ secrets.ATLASENT_SANDBOX_API_KEY != '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        v2_batch: ['false', 'true']
+        example:
+          - authorize_many
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.22'
+      - name: Run
+        if: ${{ env.HAS_SANDBOX == 'true' }}
+        env:
+          ATLASENT_API_URL: ${{ secrets.ATLASENT_SANDBOX_API_URL }}
+          ATLASENT_API_KEY: ${{ secrets.ATLASENT_SANDBOX_API_KEY }}
+          ATLASENT_V2_BATCH: ${{ matrix.v2_batch }}
+        run: go run v2/go/${{ matrix.example }}/

@@ -1,0 +1,187 @@
+# accounting-close-gate.yaml
+#
+# AtlaSent policy bundle for the accounting close pilot.
+# Load into the AtlaSent engine via the console or the API:
+#
+# NOTE: v1-policy-bundles is disabled in production and will return 404.
+# See atlasent-api/supabase/runtime-functions-disabled.json.
+# Use the AtlaSent Console UI to load policy bundles instead.
+#   curl -X POST https://api.atlasent.io/functions/v1/v1-policy-bundles \
+#     -H "Authorization: Bearer $ATLASENT_API_KEY" \
+#     -H "Content-Type: application/yaml" \
+#     --data-binary @policies/accounting-close-gate.yaml
+
+id: accounting-close-gate
+version: "1.0.0"
+description: >
+  Fail-closed authorization policy for accounting period close workflows.
+  Enforces delegation limits, authorized actor lists, dual-approval, and
+  sequential close preconditions across all five protected actions.
+
+# ---------------------------------------------------------------------------
+# Global configuration
+# ---------------------------------------------------------------------------
+
+config:
+  fail_closed: true          # transport / evaluation errors -> deny
+  audit_all_decisions: true  # record allow AND deny to the audit chain
+  permit_ttl_seconds: 300    # single-use permits expire after 5 minutes
+
+# ---------------------------------------------------------------------------
+# Actor lists
+# ---------------------------------------------------------------------------
+
+lists:
+  authorized_controllers:
+    - alice.chen@acme.com
+    - bob.smith@acme.com
+
+  authorized_submitters:
+    - alice.chen@acme.com
+    - carol.jones@acme.com
+
+  cfo_approvers:
+    - sarah.lee@acme.com
+
+# ---------------------------------------------------------------------------
+# Thresholds
+# ---------------------------------------------------------------------------
+
+thresholds:
+  je_delegation_limit_usd: 100000
+
+# ---------------------------------------------------------------------------
+# Action rules
+# ---------------------------------------------------------------------------
+
+rules:
+
+  # -- close_task.complete --------------------------------------------------
+  - action: close_task.complete
+    description: Mark a close checklist task as complete.
+    require:
+      all:
+        - field: context.task_id
+          op: present
+          error: "missing required field: task_id"
+        - field: context.completed_by
+          op: present
+          error: "missing required field: completed_by"
+        - field: context.period
+          op: present
+          error: "missing required field: period"
+    decision: allow
+
+  # -- reconciliation.certify -----------------------------------------------
+  - action: reconciliation.certify
+    description: Certify a period reconciliation.
+    require:
+      all:
+        - field: context.account_id
+          op: present
+          error: "missing required field: account_id"
+        - field: context.certified_by
+          op: in_list
+          list: authorized_controllers
+          error: "certifier is not on the authorized controller list"
+    conditional:
+      - if:
+          field: context.dual_approval_required
+          op: eq
+          value: true
+        then:
+          require:
+            field: context.second_approver
+            op: present
+            error: "dual approval required but second_approver not provided"
+    decision: allow
+
+  # -- journal_entry.approve ------------------------------------------------
+  - action: journal_entry.approve
+    description: Approve a journal entry for posting.
+    require:
+      all:
+        - field: context.je_id
+          op: present
+          error: "missing required field: je_id"
+        - field: context.amount
+          op: present
+          error: "missing required field: amount"
+    conditional:
+      - if:
+          field: context.amount
+          op: gt
+          threshold: je_delegation_limit_usd
+        then:
+          hold:
+            key_template: "je_cfo:{{context.je_id}}"
+            reason_template: >
+              JE {{context.je_id}} (${{context.amount}}) exceeds
+              ${{thresholds.je_delegation_limit_usd}} delegation limit
+              -- CFO approval required
+            notify:
+              - list: cfo_approvers
+    decision: allow
+
+  # -- adjustment.submit ----------------------------------------------------
+  - action: adjustment.submit
+    description: Submit a period-end adjustment.
+    require:
+      all:
+        - field: context.adjustment_id
+          op: present
+          error: "missing required field: adjustment_id"
+        - field: context.submitted_by
+          op: in_list
+          list: authorized_submitters
+          error: "submitter is not authorized to submit period adjustments"
+    decision: allow
+
+  # -- period.close ---------------------------------------------------------
+  - action: period.close
+    description: Lock the accounting period.
+    require:
+      all:
+        - field: context.period
+          op: present
+          error: "missing required field: period"
+        - field: context.all_tasks_complete
+          op: eq
+          value: true
+          error: "cannot close period: outstanding close tasks remain"
+    conditional:
+      - if:
+          field: context.cfo_sign_off
+          op: ne
+          value: true
+        then:
+          hold:
+            key_template: "period_close_cfo:{{context.period}}"
+            reason_template: "period {{context.period}} close requires CFO sign-off"
+            notify:
+              - list: cfo_approvers
+    decision: allow
+
+# ---------------------------------------------------------------------------
+# Audit
+# ---------------------------------------------------------------------------
+
+audit:
+  chain: sha256_linked       # SHA-256 hash-linked, append-only
+  signing: ed25519            # Ed25519-signed on export
+  export_schedule: "0 2 * * *"  # nightly export at 02:00 UTC
+  retention_days: 2555        # 7 years (SOX / 21 CFR Part 11)
+
+# ---------------------------------------------------------------------------
+# Webhooks
+# ---------------------------------------------------------------------------
+
+webhooks:
+  hold_approved:
+    url: "${ERP_WEBHOOK_URL}/atlasent/webhook"
+    events:
+      - hold.approved
+    secret_env: ATLASENT_WEBHOOK_SECRET
+    retry:
+      max_attempts: 5
+      backoff: exponential

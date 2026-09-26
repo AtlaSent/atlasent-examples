@@ -1,0 +1,91 @@
+name: AtlaSent Policy Sync
+
+on:
+  pull_request:
+    paths:
+      - 'policies/**'
+  push:
+    branches:
+      - main
+    paths:
+      - 'policies/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  # ── Dry-run on PR: validate and preview the diff ─────────────────────────────
+  policy-diff:
+    name: Preview policy diff
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: AtlaSent policy sync (dry run)
+        id: sync
+        uses: atlasent-systems-inc/atlasent-action@main
+        with:
+          api-key: ${{ secrets.ATLASENT_API_KEY }}
+          policy-sync: 'true'
+          policy-bundle: 'policies/bundle.json'
+          policy-source: 'github-pr'
+          policy-dry-run: 'true'
+
+      - name: Comment diff on PR
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const diff   = '${{ steps.sync.outputs.sync-diff }}';
+            const status = '${{ steps.sync.outputs.sync-status }}';
+            const runId  = '${{ steps.sync.outputs.sync-run-id }}';
+            const ok     = status === 'completed';
+            const icon   = ok ? '✅' : '❌';
+
+            const body = [
+              `## ${icon} AtlaSent Policy Sync — dry run`,
+              '',
+              `| | |`,
+              `|---|---|`,
+              `| **Status** | \`${status}\` |`,
+              `| **Changes** | ${diff || 'no changes'} |`,
+              `| **Run ID** | \`${runId || 'n/a'}\` |`,
+              '',
+              ok
+                ? '> Changes above will be applied when this PR merges to `main`.'
+                : '> ❌ Bundle rejected — fix errors before merging.',
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner:        context.repo.owner,
+              repo:         context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+
+  # ── Apply on merge to main ───────────────────────────────────────────────────
+  policy-apply:
+    name: Apply policies
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: AtlaSent policy sync (apply)
+        id: sync
+        uses: atlasent-systems-inc/atlasent-action@main
+        with:
+          api-key: ${{ secrets.ATLASENT_API_KEY }}
+          policy-sync: 'true'
+          policy-bundle: 'policies/bundle.json'
+          policy-source: 'github-main'
+          policy-dry-run: 'false'
+
+      - name: Log result
+        if: always()
+        run: |
+          echo "Status : ${{ steps.sync.outputs.sync-status }}"
+          echo "Changes: ${{ steps.sync.outputs.sync-diff }}"
+          echo "Run ID : ${{ steps.sync.outputs.sync-run-id }}"

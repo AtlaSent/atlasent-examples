@@ -1,0 +1,72 @@
+# Buyer-observable acceptance suite: one job per case (SF-1..SF-10) per target
+# system. Each is a button in the Actions tab. Every result is a real AtlaSent
+# API response.
+#
+# The same case set runs against Salesforce, NetSuite, ServiceNow, Jira, and AWS
+# (via Terraform) — they are reference scenarios for ONE vendor-neutral contract
+# (production.deploy / BSCM), not five integrations. A Salesforce run does NOT
+# evidence NetSuite, ServiceNow, Jira, or AWS: to claim more than one, run each
+# and record each pass separately.
+#
+# Prerequisite: the org's production.deploy is provisioned by
+# seed_saas_production_safeguard (enforced + allow_actors incl. the deployer) —
+# see salesforce-deploy-gate/README.md.
+name: salesforce-acceptance-suite
+on:
+  workflow_dispatch:
+    inputs:
+      case:
+        description: which case to run (or "all")
+        default: all
+        type: choice
+        options: [all, SF-1, SF-2, SF-3, SF-4, SF-5, SF-6, SF-7, SF-8, SF-9, SF-10]
+      target_system:
+        description: which business system to drive (or "all")
+        default: all
+        type: choice
+        options: [all, salesforce, netsuite, servicenow, jira, aws]
+permissions:
+  contents: read
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [SF-1, SF-2, SF-3, SF-4, SF-5, SF-6, SF-7, SF-8, SF-9, SF-10]
+        system: [salesforce, netsuite, servicenow, jira, aws]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run ${{ matrix.case }} (${{ matrix.system }})
+        if: >-
+          (inputs.case == 'all' || inputs.case == matrix.case) &&
+          (inputs.target_system == 'all' || inputs.target_system == matrix.system)
+        env:
+          ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
+          ATLASENT_BASE_URL: ${{ secrets.ATLASENT_BASE_URL }}
+          # MUST match the seeded allow_actors. The 1-arg seed_saas_production_safeguard
+          # bakes in github:github-actions[bot]; running as anything else denies
+          # ACTOR_NOT_ALLOWED on the compliant cases (SF-1/SF-9) — the #1 gotcha recorded
+          # in the 2026-07-25 acceptance RESULT. Override via the ATLASENT_ACTOR repo
+          # variable ONLY after republishing the bundle's allow_actors to match.
+          ATLASENT_ACTOR: ${{ vars.ATLASENT_ACTOR || 'github:github-actions[bot]' }}
+          TARGET_SYSTEM: ${{ matrix.system }}
+          # Optional per-system target overrides. Selected in the shell, NOT via a
+          # `cond && A || B` expression: an unset NETSUITE_ACCOUNT_ID is falsy, so the
+          # ternary would silently hand the NetSuite run the Salesforce alias.
+          SALESFORCE_ORG_ALIAS: ${{ vars.SALESFORCE_ORG_ALIAS }}
+          NETSUITE_ACCOUNT_ID: ${{ vars.NETSUITE_ACCOUNT_ID }}
+          SERVICENOW_INSTANCE_NAME: ${{ vars.SERVICENOW_INSTANCE_NAME }}
+          JIRA_SITE_NAME: ${{ vars.JIRA_SITE_NAME }}
+          AWS_TARGET_ACCOUNT_ID: ${{ vars.AWS_TARGET_ACCOUNT_ID }}
+          # Set to <=60 (and set the class permit_ttl_seconds to match) to run SF-10 automatically.
+          PERMIT_TTL_SECONDS: ${{ vars.PERMIT_TTL_SECONDS || '3600' }}
+        run: |
+          case "$TARGET_SYSTEM" in
+            netsuite)   export TARGET_REF="$NETSUITE_ACCOUNT_ID" ;;
+            servicenow) export TARGET_REF="$SERVICENOW_INSTANCE_NAME" ;;
+            jira)       export TARGET_REF="$JIRA_SITE_NAME" ;;
+            aws)        export TARGET_REF="$AWS_TARGET_ACCOUNT_ID" ;;
+            *)          export TARGET_REF="$SALESFORCE_ORG_ALIAS" ;;
+          esac
+          bash salesforce-deploy-gate/scripts/run-acceptance-case.sh ${{ matrix.case }}

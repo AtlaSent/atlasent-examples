@@ -1,0 +1,103 @@
+{
+  "atlasent_audit_bundle_version": "1",
+  "exported_at": "2026-03-31T18:01:00+00:00",
+  "period": {
+    "from": "2026-03-31T18:00:01+00:00",
+    "to": "2026-03-31T18:00:55+00:00"
+  },
+  "actor_filter": null,
+  "key_id": "atlasent-demo-key-1",
+  "public_key_ed25519_b64": "oOLTRVF0WeUAueMQbEY8oL2xQTxS0vzmqikdFvYCPuU=",
+  "events": [
+    {
+      "event_id": "evt_demo000000a1",
+      "timestamp": "2026-03-31T18:00:01+00:00",
+      "actor": "alice.chen@acme.com",
+      "action": "reconciliation.certify",
+      "decision": "allow",
+      "permit_id": "pt_demosample0001",
+      "reason": "reconciliation for CASH-1000 certified by alice.chen@acme.com",
+      "previous_hash": "",
+      "audit_hash": "0552d6073378fbcc68e46a4fdabebcdd",
+      "context_snapshot": {
+        "account_id": "CASH-1000",
+        "certified_by": "alice.chen@acme.com",
+        "period": "Q1-2026",
+        "balance_difference": 0.0,
+        "dual_approval_required": false
+      }
+    },
+    {
+      "event_id": "evt_demo000000b2",
+      "timestamp": "2026-03-31T18:00:14+00:00",
+      "actor": "controller-bot",
+      "action": "journal_entry.approve",
+      "decision": "allow",
+      "permit_id": "pt_demosample0002",
+      "reason": "journal entry JE-2026-4821 approved ($250,000)",
+      "previous_hash": "0552d6073378fbcc68e46a4fdabebcdd",
+      "audit_hash": "185aafc3b8b9c6b1a565a17325ab626d",
+      "context_snapshot": {
+        "je_id": "JE-2026-4821",
+        "amount": 250000.0,
+        "period": "Q1-2026",
+        "approved_by": "cfo@acme.com"
+      }
+    },
+    {
+      "event_id": "evt_demo000000c3",
+      "timestamp": "2026-03-31T18:00:27+00:00",
+      "actor": "carol.jones@acme.com",
+      "action": "adjustment.submit",
+      "decision": "allow",
+      "permit_id": "pt_demosample0003",
+      "reason": "adjustment ADJ-2026-009 submitted by carol.jones@acme.com",
+      "previous_hash": "185aafc3b8b9c6b1a565a17325ab626d",
+      "audit_hash": "a89b6cd11a67c1a2ed2b67da15446bbc",
+      "context_snapshot": {
+        "adjustment_id": "ADJ-2026-009",
+        "submitted_by": "carol.jones@acme.com",
+        "period": "Q1-2026",
+        "amount": 1500.0
+      }
+    },
+    {
+      "event_id": "evt_demo000000d4",
+      "timestamp": "2026-03-31T18:00:41+00:00",
+      "actor": "cfo-bot",
+      "action": "period.close",
+      "decision": "allow",
+      "permit_id": "pt_demosample0004",
+      "reason": "period Q1-2026 close authorized -- all conditions satisfied",
+      "previous_hash": "a89b6cd11a67c1a2ed2b67da15446bbc",
+      "audit_hash": "9295ea3ad925a65c3b9eb9206fc5ee1d",
+      "context_snapshot": {
+        "period": "Q1-2026",
+        "all_tasks_complete": true,
+        "cfo_signoff_by": "cfo@acme.com"
+      }
+    },
+    {
+      "event_id": "evt_demo000000e5",
+      "timestamp": "2026-03-31T18:00:55+00:00",
+      "actor": "alice.chen@acme.com",
+      "action": "reconciliation.certify",
+      "decision": "allow",
+      "permit_id": "pt_demosample0005",
+      "reason": "reconciliation for AR-3000 certified by alice.chen@acme.com",
+      "previous_hash": "9295ea3ad925a65c3b9eb9206fc5ee1d",
+      "audit_hash": "00b3c531af6d91f6e35841797e6faee2",
+      "context_snapshot": {
+        "account_id": "AR-3000",
+        "certified_by": "alice.chen@acme.com",
+        "period": "Q1-2026",
+        "balance_difference": 0.0,
+        "dual_approval_required": true,
+        "second_approver": "bob.smith@acme.com"
+      }
+    }
+  ],
+  "head_hash": "00b3c531af6d91f6e35841797e6faee2",
+  "signature_ed25519_b64": "rgviZBWYAVPLQ1PtovbBQ/oaggBdpVLyA936hey70iUEuHTVxhjGFhVsmQ/UGRerGWSjuZsM0Ll462cgwtwGBA==",
+  "demo": true
+}

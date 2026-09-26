@@ -1,0 +1,143 @@
+# contract-execution.yaml
+#
+# AtlaSent policy bundle for contract execution and material amendment.
+# Load into the AtlaSent engine via the console or the API:
+#
+# NOTE: v1-policy-bundles is disabled in production and will return 404.
+# See atlasent-api/supabase/runtime-functions-disabled.json.
+# Use the AtlaSent Console UI to load policy bundles instead.
+#   curl -X POST https://api.atlasent.io/functions/v1/v1-policy-bundles \
+#     -H "Authorization: Bearer $ATLASENT_API_KEY" \
+#     -H "Content-Type: application/yaml" \
+#     --data-binary @policies/contract-execution.yaml
+#
+# Regulatory references:
+#   SOX Section 302   — CEO/CFO certification of financial controls
+#   SOX Section 404   — management assessment of internal controls
+#   SOX Section 802   — records management / audit trail
+#   ASC 606           — revenue from contracts with customers
+#   COSO Framework    — control environment and delegation of authority
+
+id: contract-execution
+version: "1.0.0"
+description: >
+  Fail-closed authorization policy for contract execution and material amendment.
+  Enforces legal sign-off on all contracts, CFO sign-off above the $250,000
+  threshold, and escalation notes for material amendments. Machine-executable
+  is false: named legal counsel must be present on every execution request.
+
+# ---------------------------------------------------------------------------
+# Global configuration
+# ---------------------------------------------------------------------------
+
+config:
+  fail_closed: true            # transport / evaluation errors -> deny
+  machine_executable: false    # procurement bots cannot self-authorize execution
+  audit_all_decisions: true    # record allow AND deny to the audit chain
+  permit_ttl_seconds: 900      # single-use permits expire after 15 minutes
+
+# ---------------------------------------------------------------------------
+# Actor lists
+# ---------------------------------------------------------------------------
+
+lists:
+  authorized_legal_approvers:
+    - legal.counsel@acme.com
+    - general.counsel@acme.com
+    - legal.vp@acme.com
+
+  authorized_cfo_list:
+    - cfo@acme.com
+    - cfo.deputy@acme.com
+
+# ---------------------------------------------------------------------------
+# Action rules
+# ---------------------------------------------------------------------------
+
+rules:
+
+  # -- contract.execute -------------------------------------------------------
+  - action: contract.execute
+    description: >
+      Execute a new or renewed contract. Requires legal sign-off for all
+      contracts; CFO sign-off additionally required above $250,000.
+    machine_executable: false
+    require:
+      all:
+        - field: context.contractId
+          op: present
+          error: "DENY_MISSING_FIELD: missing required field: contractId"
+        - field: context.counterparty
+          op: present
+          error: "DENY_MISSING_FIELD: missing required field: counterparty"
+        - field: context.effectiveDate
+          op: present
+          error: "DENY_MISSING_FIELD: missing required field: effectiveDate"
+        - field: context.contractValue
+          op: present
+          error: "DENY_MISSING_FIELD: missing required field: contractValue"
+        - field: context.legalApprovedBy
+          op: present
+          error: "DENY_LEGAL_APPROVAL_MISSING: legalApprovedBy is absent — legal sign-off required"
+        - field: context.legalApprovedBy
+          op: in_list
+          list: authorized_legal_approvers
+          error: "DENY_LEGAL_APPROVAL_MISSING: legalApprovedBy is not on the authorized legal approver list"
+    decision: allow
+
+  # -- contract.amend ---------------------------------------------------------
+  - action: contract.amend
+    description: >
+      Amend a material term of an existing contract. Requires legal sign-off
+      and an escalation note documenting the business rationale.
+    machine_executable: false
+    require:
+      all:
+        - field: context.contractId
+          op: present
+          error: "DENY_MISSING_FIELD: missing required field: contractId"
+        - field: context.amendmentId
+          op: present
+          error: "DENY_MISSING_FIELD: missing required field: amendmentId"
+        - field: context.amendmentType
+          op: present
+          error: "DENY_MISSING_FIELD: missing required field: amendmentType"
+        - field: context.amendedClause
+          op: present
+          error: "DENY_MISSING_FIELD: missing required field: amendedClause"
+        - field: context.legalApprovedBy
+          op: present
+          error: "DENY_LEGAL_APPROVAL_MISSING: legalApprovedBy is absent — legal sign-off required"
+        - field: context.legalApprovedBy
+          op: in_list
+          list: authorized_legal_approvers
+          error: "DENY_LEGAL_APPROVAL_MISSING: legalApprovedBy is not on the authorized legal approver list"
+        - field: context.escalationNote
+          op: present
+          error: "DENY_ESCALATION_NOTE_MISSING: escalationNote required for contract amendments"
+    decision: allow
+
+# ---------------------------------------------------------------------------
+# Audit
+# ---------------------------------------------------------------------------
+
+audit:
+  chain: sha256_linked          # SHA-256 hash-linked, append-only
+  signing: ed25519              # Ed25519-signed on export
+  export_schedule: "0 2 * * *"  # nightly export at 02:00 UTC
+  retention_days: 2555          # 7 years (SOX Section 802 records retention)
+
+# ---------------------------------------------------------------------------
+# Webhooks
+# ---------------------------------------------------------------------------
+
+webhooks:
+  decision_notify:
+    url: "${CLM_WEBHOOK_URL}/atlasent/webhook"
+    events:
+      - decision.allow
+      - decision.deny
+    secret_env: ATLASENT_WEBHOOK_SECRET
+    retry:
+      max_attempts: 5
+      backoff: exponential

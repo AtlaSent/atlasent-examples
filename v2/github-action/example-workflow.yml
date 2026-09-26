@@ -1,0 +1,42 @@
+# Example: Use AtlaSent to gate a production deployment
+name: Deploy with AtlaSent Gate
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  gate:
+    name: AtlaSent Policy Gate
+    runs-on: ubuntu-latest
+    outputs:
+      decision: ${{ steps.atlasent.outputs.decision }}
+      permit-id: ${{ steps.atlasent.outputs.permit-id }}
+    steps:
+      - name: Evaluate deployment action
+        id: atlasent
+        uses: atlasent-systems-inc/atlasent-action@v2
+        with:
+          atlasent-api-url: ${{ secrets.ATLASENT_API_URL }}
+          atlasent-api-key: ${{ secrets.ATLASENT_API_KEY }}
+          action-id: production.deploy
+          actor-id: ${{ github.actor }}
+          target-id: ${{ github.repository }}
+          fail-on-deny: true
+
+      - name: Show decision
+        run: |
+          echo "Decision: ${{ steps.atlasent.outputs.decision }}"
+          echo "Risk: ${{ steps.atlasent.outputs.risk-level }} (${{ steps.atlasent.outputs.risk-score }})"
+          echo "Permit: ${{ steps.atlasent.outputs.permit-id }}"
+
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: gate
+    if: needs.gate.outputs.decision == 'allow'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy application
+        run: echo "Deploying with permit ${{ needs.gate.outputs.permit-id }}"
+        # Add your actual deploy steps here

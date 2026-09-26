@@ -1,0 +1,17 @@
+{
+  "name": "atlasent-compliance-evidence",
+  "version": "1.0.0",
+  "description": "Example: trigger and display an AtlaSent SOC 2 evidence run",
+  "scripts": {
+    "start": "ts-node -r dotenv/config src/index.ts"
+  },
+  "dependencies": {
+    "@atlasent/sdk": "2.10.0",
+    "dotenv": "^16.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.4.0"
+  }
+}

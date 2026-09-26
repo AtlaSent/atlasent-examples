@@ -1,0 +1,109 @@
+name: Deploy Gate V1
+
+# Gates "deploy checkout-api to production" on an AtlaSent permit.
+# Wire shape validated live against the hosted runtime (2026-06-25):
+#   - evaluate request:  { action_type, actor_id, context:{ environment, ... } }
+#   - evaluate response: { decision, permit_token, deny_code, request_id, audit_entry_hash }
+#   - verify request:    { permit_token, action_type, actor_id, environment }   <- environment is TOP-LEVEL
+#   - verify response:   { valid, outcome, verify_audit_hash }
+# Fail-closed: the Deploy step only runs after an allow + a verified permit.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Gate and deploy checkout-api
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    env:
+      ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
+      # REQUIRED. The AtlaSent API base URL, ending in /functions/v1:
+      #   https://api.atlasent.io/functions/v1
+      # (Self-hosted: your own deployment's https://<project-ref>.supabase.co/functions/v1.)
+      # Set this secret explicitly — a missing base URL fails the gate closed.
+      ATLASENT_API_URL: ${{ secrets.ATLASENT_API_URL }}
+      SERVICE: checkout-api
+      TARGET_ENV: production
+      ACTION_TYPE: production.deploy
+      # Must match an entry in the policy's allow_actors. The canonical form for a
+      # GitHub-Action caller is github:<username>.
+      ACTOR: github:${{ github.actor }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Evaluate production.deploy
+        id: evaluate
+        shell: bash
+        run: |
+          set -euo pipefail
+          body=$(jq -n \
+            --arg action_type "$ACTION_TYPE" \
+            --arg actor_id "$ACTOR" \
+            --arg service "$SERVICE" \
+            --arg environment "$TARGET_ENV" \
+            --arg ref "${{ github.ref }}" \
+            --arg sha "${{ github.sha }}" \
+            '{action_type:$action_type, actor_id:$actor_id,
+              context:{environment:$environment, service:$service, ref:$ref, sha:$sha,
+                       approvals:2, change_window:true}}')
+          response=$(curl -fsS \
+            -H "authorization: Bearer $ATLASENT_API_KEY" \
+            -H "content-type: application/json" \
+            -d "$body" \
+            "$ATLASENT_API_URL/v1-evaluate")
+          decision=$(jq -r '.decision' <<<"$response" | tr '[:upper:]' '[:lower:]')
+          permit_token=$(jq -r '.permit_token // empty' <<<"$response")
+          audit_hash=$(jq -r '.audit_entry_hash // empty' <<<"$response")
+          deny_code=$(jq -r '.deny_code // empty' <<<"$response")
+          echo "decision=$decision" >> "$GITHUB_OUTPUT"
+          echo "permit_token=$permit_token" >> "$GITHUB_OUTPUT"
+          echo "audit_hash=$audit_hash" >> "$GITHUB_OUTPUT"
+          echo "AtlaSent decision: $decision  permit: ${permit_token:0:16}…  audit: $audit_hash"
+          if [ "$decision" != "allow" ] || [ -z "$permit_token" ]; then
+            echo "::error::AtlaSent blocked production.deploy (decision=$decision deny_code=$deny_code)."
+            exit 1
+          fi
+
+      - name: Verify permit
+        shell: bash
+        run: |
+          set -euo pipefail
+          body=$(jq -n \
+            --arg permit_token "${{ steps.evaluate.outputs.permit_token }}" \
+            --arg action_type "$ACTION_TYPE" \
+            --arg actor_id "$ACTOR" \
+            --arg environment "$TARGET_ENV" \
+            '{permit_token:$permit_token, action_type:$action_type, actor_id:$actor_id, environment:$environment}')
+          response=$(curl -fsS \
+            -H "authorization: Bearer $ATLASENT_API_KEY" \
+            -H "content-type: application/json" \
+            -d "$body" \
+            "$ATLASENT_API_URL/v1-verify-permit")
+          valid=$(jq -r '.valid // false' <<<"$response")
+          echo "AtlaSent permit verification: $valid"
+          if [ "$valid" != "true" ]; then
+            echo "::error::Permit verification failed: $(jq -rc '{outcome, verify_error_code, reason}' <<<"$response")"
+            exit 1
+          fi
+
+      - name: Deploy checkout-api
+        run: |
+          echo "Deploying $SERVICE to $TARGET_ENV at ${{ github.sha }}"
+          # Replace this line with your deployment command.
+
+      - name: Audit evidence
+        if: always()
+        run: |
+          echo "action=production.deploy"
+          echo "service=$SERVICE"
+          echo "environment=$TARGET_ENV"
+          echo "ref=${{ github.ref }}"
+          echo "sha=${{ github.sha }}"
+          echo "decision=${{ steps.evaluate.outputs.decision }}"
+          echo "permit_token=${{ steps.evaluate.outputs.permit_token }}"
+          echo "audit_entry_hash=${{ steps.evaluate.outputs.audit_hash }}"

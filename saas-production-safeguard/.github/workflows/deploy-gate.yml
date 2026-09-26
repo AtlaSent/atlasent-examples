@@ -1,0 +1,106 @@
+name: deploy-gate
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: target environment
+        default: production
+        type: string
+      wait_for_approval:
+        description: wait for a human resolution when the policy returns hold or escalate
+        default: false
+        type: boolean
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.digest.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash saas-production-safeguard/app/build.sh out/
+      - id: digest
+        run: echo "digest=sha256:$(tar -cf - out | sha256sum | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-artifact
+          path: out/
+  gate:
+    needs: build
+    runs-on: ubuntu-latest
+    outputs:
+      permit_token: ${{ steps.authorize.outputs.permit-token }}
+      evaluation_id: ${{ steps.authorize.outputs.evaluation-id }}
+      waited_for_approval: ${{ steps.authorize.outputs.waited-for-approval }}
+    steps:
+      - name: Request authorization; wait only when explicitly requested
+        id: authorize
+        uses: AtlaSent-Systems-Inc/atlasent-action@0f892473d8f78d25d270eaccb0ee804b6ba66e71
+        env:
+          ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
+          ATLASENT_BASE_URL: ${{ secrets.ATLASENT_BASE_URL }}
+        with:
+          action: production.deploy
+          actor: github:github-actions[bot]
+          target-id: service:hello-safeguard
+          environment: ${{ inputs.environment }}
+          artifact-digest: ${{ needs.build.outputs.digest }}
+          context: >-
+            {"environment":"${{ inputs.environment }}","state_snapshot":"${{ needs.build.outputs.digest }}"}
+          approvals-from: none
+          wait-for-approval: ${{ inputs.wait_for_approval }}
+          wait-timeout-ms: "600000"
+          mode: evaluate-only
+  deploy:
+    needs: [build, gate]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: app-artifact
+          path: out/
+      - name: Re-verify permit at the execution boundary
+        id: boundary
+        uses: AtlaSent-Systems-Inc/atlasent-action@0f892473d8f78d25d270eaccb0ee804b6ba66e71
+        env:
+          ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
+          ATLASENT_BASE_URL: ${{ secrets.ATLASENT_BASE_URL }}
+        with:
+          verify-permit: "true"
+          permit-token: ${{ needs.gate.outputs.permit_token }}
+          action: production.deploy
+          actor: github:github-actions[bot]
+          target-id: service:hello-safeguard
+          environment: ${{ inputs.environment }}
+          artifact-digest: ${{ needs.build.outputs.digest }}
+      - name: Deploy (harmless)
+        if: steps.boundary.outputs.verified == 'true'
+        run: bash saas-production-safeguard/app/deploy.sh out/
+      - name: Report execution
+        if: always()
+        env:
+          KEY: ${{ secrets.ATLASENT_API_KEY }}
+          BASE: ${{ secrets.ATLASENT_BASE_URL }}
+          EVAL: ${{ needs.gate.outputs.evaluation_id }}
+        run: |
+          curl -sS -X POST "$BASE/v1-execution-results" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+            -d "$(jq -nc --arg e "$EVAL" --arg s "${{ job.status }}" '{evaluation_id:$e, status:$s}')" || true
+  evidence:
+    needs: [gate, deploy]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Export audit evidence
+        env:
+          KEY: ${{ secrets.ATLASENT_API_KEY }}
+          BASE: ${{ secrets.ATLASENT_BASE_URL }}
+          EVAL: ${{ needs.gate.outputs.evaluation_id }}
+        run: |
+          curl -sS "$BASE/v1-export-audit?evaluation_id=$EVAL" -H "Authorization: Bearer $KEY" -o evidence-package.json || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: evidence-package
+          path: evidence-package.json

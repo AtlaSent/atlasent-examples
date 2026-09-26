@@ -1,0 +1,188 @@
+# Wave C.E3 — v2 examples CI matrix.
+#
+# Runs all v2/* examples in a Node 20 / Python 3.11 matrix on every push
+# that touches v2/ or this workflow file.
+#
+# Smoke / dry-run mode
+# --------------------
+# When ATLASENT_SANDBOX_API_KEY is absent (e.g. fork PRs, Dependabot) the
+# examples run with ATLASENT_DRY_RUN=true. In dry-run mode examples stub out
+# all network calls so CI always goes green without live API keys.
+#
+# Note: secrets cannot be referenced directly in step-level `if:` conditions
+# (doing so fails the run at startup in contexts without secret access, e.g.
+# Dependabot runs). We hoist the presence check into a job-level `env:`
+# boolean (HAS_SANDBOX) and gate the steps on it instead.
+#
+# Secrets (all optional — omit for dry-run only):
+#   ATLASENT_SANDBOX_API_URL
+#   ATLASENT_SANDBOX_API_KEY
+#   OPENAI_SANDBOX_KEY
+
+name: v2 examples
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'v2/**'
+      - '.github/workflows/v2-examples.yml'
+  pull_request:
+    paths:
+      - 'v2/**'
+      - '.github/workflows/v2-examples.yml'
+
+jobs:
+  # --------------------------------------------------------------------------
+  # TypeScript examples — Node 20
+  # --------------------------------------------------------------------------
+  typescript:
+    name: "ts / ${{ matrix.example }} / batch=${{ matrix.v2_batch }}"
+    runs-on: ubuntu-latest
+    env:
+      HAS_SANDBOX: ${{ secrets.ATLASENT_SANDBOX_API_KEY != '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20']
+        v2_batch: ['false', 'true']
+        example:
+          - openai-functions-agent
+          - authorize-many
+          - evaluate-basic
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Node ${{ matrix.node }}
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Install dependencies
+        working-directory: v2/typescript/${{ matrix.example }}
+        run: |
+          if [ -f package.json ]; then
+            npm install --legacy-peer-deps
+          fi
+
+      - name: Smoke / dry-run (no live keys)
+        if: ${{ env.HAS_SANDBOX != 'true' }}
+        working-directory: v2/typescript/${{ matrix.example }}
+        env:
+          ATLASENT_DRY_RUN: 'true'
+          ATLASENT_V2_BATCH: ${{ matrix.v2_batch }}
+        run: |
+          if [ -f package.json ] && grep -q '"smoke"' package.json; then
+            npm run smoke
+          elif [ -f index.ts ]; then
+            npx tsx index.ts
+          elif [ -f index.js ]; then
+            node index.js
+          fi
+
+      - name: Live run (sandbox keys available)
+        if: ${{ env.HAS_SANDBOX == 'true' }}
+        working-directory: v2/typescript/${{ matrix.example }}
+        env:
+          ATLASENT_API_URL: ${{ secrets.ATLASENT_SANDBOX_API_URL }}
+          ATLASENT_API_KEY: ${{ secrets.ATLASENT_SANDBOX_API_KEY }}
+          ATLASENT_V2_BATCH: ${{ matrix.v2_batch }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_SANDBOX_KEY }}
+        run: |
+          if [ -f package.json ] && grep -q '"start"' package.json; then
+            npm start
+          elif [ -f index.ts ]; then
+            npx tsx index.ts
+          elif [ -f index.js ]; then
+            node index.js
+          fi
+
+  # --------------------------------------------------------------------------
+  # Python examples — Python 3.11
+  # --------------------------------------------------------------------------
+  python:
+    name: "py / ${{ matrix.example }} / batch=${{ matrix.v2_batch }}"
+    runs-on: ubuntu-latest
+    env:
+      HAS_SANDBOX: ${{ secrets.ATLASENT_SANDBOX_API_KEY != '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11']
+        v2_batch: ['false', 'true']
+        example:
+          - openai-functions-agent
+          - authorize_many
+          - evaluate_basic
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install dependencies
+        run: |
+          dir="v2/python/${{ matrix.example }}"
+          if [ -d "$dir" ] && [ -f "$dir/requirements.txt" ]; then
+            pip install -r "$dir/requirements.txt"
+          elif [ -f "v2/python/requirements.txt" ]; then
+            pip install -r v2/python/requirements.txt
+          else
+            pip install httpx
+          fi
+
+      - name: Smoke / dry-run (no live keys)
+        if: ${{ env.HAS_SANDBOX != 'true' }}
+        env:
+          ATLASENT_DRY_RUN: 'true'
+          ATLASENT_V2_BATCH: ${{ matrix.v2_batch }}
+          # Provide dummy values so scripts that read these env vars don't crash
+          ATLASENT_API_URL: 'https://dry-run.atlasent.io'
+          ATLASENT_API_KEY: 'dry-run'
+          OPENAI_API_KEY: 'dry-run'
+        run: |
+          dir="v2/python/${{ matrix.example }}"
+          if [ -d "$dir" ]; then
+            cd "$dir"
+            # Run any test_*.py files as tests first (e.g. wire-shape
+            # regression tests) -- `python *.py` alone would pass the test
+            # file's name as an argv to whichever script sorts first
+            # instead of ever executing it as its own interpreter run.
+            for f in test_*.py; do
+              [ -f "$f" ] && python "$f"
+            done
+            for f in *.py; do
+              case "$f" in
+                test_*.py) ;;
+                *) python "$f" ;;
+              esac
+            done
+          else
+            python "v2/python/${{ matrix.example }}.py"
+          fi
+
+      - name: Live run (sandbox keys available)
+        if: ${{ env.HAS_SANDBOX == 'true' }}
+        env:
+          ATLASENT_API_URL: ${{ secrets.ATLASENT_SANDBOX_API_URL }}
+          ATLASENT_API_KEY: ${{ secrets.ATLASENT_SANDBOX_API_KEY }}
+          ATLASENT_V2_BATCH: ${{ matrix.v2_batch }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_SANDBOX_KEY }}
+        run: |
+          dir="v2/python/${{ matrix.example }}"
+          if [ -d "$dir" ]; then
+            cd "$dir"
+            for f in test_*.py; do
+              [ -f "$f" ] && python "$f"
+            done
+            for f in *.py; do
+              case "$f" in
+                test_*.py) ;;
+                *) python "$f" ;;
+              esac
+            done
+          else
+            python "v2/python/${{ matrix.example }}.py"
+          fi

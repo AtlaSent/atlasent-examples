@@ -1,0 +1,33 @@
+# Buyer-observable acceptance suite: one job per case (AC-1..AC-8). Each is a
+# button in the Actions tab. Every result is a real AtlaSent API response.
+# Prerequisite: the org's production.deploy is provisioned by
+# seed_saas_production_safeguard (enforced + allow_actors) — see the pack runbook.
+name: acceptance-suite
+on:
+  workflow_dispatch:
+    inputs:
+      case:
+        description: which case to run (or "all")
+        default: all
+        type: choice
+        options: [all, AC-1, AC-2, AC-3, AC-4, AC-5, AC-6, AC-7, AC-8]
+permissions:
+  contents: read
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [AC-1, AC-2, AC-3, AC-4, AC-5, AC-6, AC-7, AC-8]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run ${{ matrix.case }}
+        if: ${{ inputs.case == 'all' || inputs.case == matrix.case }}
+        env:
+          ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
+          ATLASENT_BASE_URL: ${{ secrets.ATLASENT_BASE_URL }}
+          ATLASENT_ACTOR: github:github-actions[bot]
+          # Set to <=60 (and set the class permit_ttl_seconds to match) to run AC-7 automatically.
+          PERMIT_TTL_SECONDS: ${{ vars.PERMIT_TTL_SECONDS || '3600' }}
+        run: bash saas-production-safeguard/scripts/run-acceptance-case.sh ${{ matrix.case }}

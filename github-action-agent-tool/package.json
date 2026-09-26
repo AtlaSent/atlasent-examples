@@ -1,0 +1,21 @@
+{
+  "name": "github-action-agent-tool",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "AtlaSent agent tool call gating via GitHub Actions",
+  "scripts": {
+    "evaluate": "tsx src/evaluate.ts",
+    "execute": "tsx src/execute.ts",
+    "consume": "tsx src/consume.ts",
+    "mock": "npx @atlasent/sdk mock"
+  },
+  "dependencies": {
+    "@atlasent/sdk": "2.10.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.41",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}

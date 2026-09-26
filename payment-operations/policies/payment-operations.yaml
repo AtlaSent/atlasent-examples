@@ -1,0 +1,200 @@
+# payment-operations.yaml
+#
+# AtlaSent policy bundle for payment operations lifecycle authorization.
+# Load into the AtlaSent engine via the console or the API:
+#
+# NOTE: v1-policy-bundles is disabled in production and will return 404.
+# See atlasent-api/supabase/runtime-functions-disabled.json.
+# Use the AtlaSent Console UI to load policy bundles instead.
+#   curl -X POST https://api.atlasent.io/functions/v1/v1-policy-bundles \
+#     -H "Authorization: Bearer $ATLASENT_API_KEY" \
+#     -H "Content-Type: application/yaml" \
+#     --data-binary @policies/payment-operations.yaml
+#
+# Production reference: an internal ledger system
+
+id: payment-operations
+version: "1.0.0"
+description: >
+  Fail-closed authorization policy for the full payment lifecycle state machine.
+  AP manager role required for approval actions. Treasury role required for
+  execution. Payment holds trigger escalation to compliance. policy_error is
+  a terminal blocking state. QuickBooks transaction approvals require AP
+  manager role.
+
+# ---------------------------------------------------------------------------
+# Global configuration
+# ---------------------------------------------------------------------------
+
+config:
+  fail_closed: true            # transport / evaluation errors -> deny
+  audit_all_decisions: true    # record allow AND deny to the audit chain
+  permit_ttl_seconds: 300      # single-use permits expire after 5 minutes
+
+# ---------------------------------------------------------------------------
+# Role definitions
+# ---------------------------------------------------------------------------
+
+roles:
+  ap_manager:
+    members:
+      - ap.mgr@acme.example
+      - ap.director@acme.example
+
+  treasury:
+    members:
+      - treasury.ops@acme.example
+      - treasury.mgr@acme.example
+
+# ---------------------------------------------------------------------------
+# Thresholds
+# ---------------------------------------------------------------------------
+
+thresholds:
+  ap_manager_limit_usd: 250000   # AP manager approval limit; above requires CFO
+
+# ---------------------------------------------------------------------------
+# Action rules
+# ---------------------------------------------------------------------------
+
+rules:
+
+  # -- payment.approval.approve ----------------------------------------------
+  - action: payment.approval.approve
+    description: >
+      AP manager approves a vendor invoice payment. Requires ap_manager role
+      and amount within delegation limit.
+    require:
+      all:
+        - field: context.paymentId
+          op: present
+          error: "missing required field: paymentId"
+        - field: context.approvedBy
+          op: present
+          error: "missing required field: approvedBy"
+        - field: context.approvedBy
+          op: in_role
+          role: ap_manager
+          error: "DENY_AUTHORITY: approvedBy does not have ap_manager role required to approve payments"
+        - field: context.invoiceId
+          op: present
+          error: "missing required field: invoiceId"
+        - field: context.vendorId
+          op: present
+          error: "missing required field: vendorId"
+        - field: context.amount
+          op: lte
+          threshold: ap_manager_limit_usd
+          error: "DENY_EXCEEDS_LIMIT: amount exceeds AP manager delegation limit — CFO approval required"
+    decision: allow
+
+  # -- payment.approval.deny -------------------------------------------------
+  - action: payment.approval.deny
+    description: AP manager denies a payment with documented reason.
+    require:
+      all:
+        - field: context.paymentId
+          op: present
+          error: "missing required field: paymentId"
+        - field: context.deniedBy
+          op: in_role
+          role: ap_manager
+          error: "DENY_AUTHORITY: deniedBy does not have ap_manager role"
+        - field: context.reason
+          op: present
+          error: "missing required field: reason"
+    decision: allow
+
+  # -- payment.execute.approved ----------------------------------------------
+  - action: payment.execute.approved
+    description: >
+      Treasury executes a previously approved payment. Requires treasury role
+      and a valid bank reference.
+    require:
+      all:
+        - field: context.paymentId
+          op: present
+          error: "missing required field: paymentId"
+        - field: context.executedBy
+          op: in_role
+          role: treasury
+          error: "DENY_AUTHORITY: executedBy does not have treasury role required to execute payments"
+        - field: context.bankReference
+          op: present
+          error: "missing required field: bankReference"
+    decision: allow
+
+  # -- payment.execute.held --------------------------------------------------
+  - action: payment.execute.held
+    description: >
+      Fraud or compliance system places a payment on hold for review.
+      Triggers escalation to compliance team.
+    require:
+      all:
+        - field: context.paymentId
+          op: present
+          error: "missing required field: paymentId"
+        - field: context.heldBy
+          op: present
+          error: "missing required field: heldBy"
+        - field: context.holdReason
+          op: present
+          error: "missing required field: holdReason"
+    decision: allow
+    on_allow:
+      escalate:
+        to: compliance-team
+        reason_template: "Payment {{context.paymentId}} held: {{context.holdReason}}"
+
+  # -- payment.execute.policy_error ------------------------------------------
+  - action: payment.execute.policy_error
+    description: >
+      Policy violation blocks payment execution. This is a terminal blocking
+      state — payment execution is never permitted when a policy error exists.
+    decision: deny
+    reasons:
+      - "DENY_POLICY_VIOLATION: policy_error is a terminal blocking state — execution not permitted"
+
+  # -- qb.transaction.approve ------------------------------------------------
+  - action: qb.transaction.approve
+    description: >
+      AP manager approves a QuickBooks transaction for posting.
+    require:
+      all:
+        - field: context.transactionId
+          op: present
+          error: "missing required field: transactionId"
+        - field: context.approvedBy
+          op: in_role
+          role: ap_manager
+          error: "DENY_AUTHORITY: approvedBy does not have ap_manager role required to approve QB transactions"
+        - field: context.accountCode
+          op: present
+          error: "missing required field: accountCode"
+    decision: allow
+
+# ---------------------------------------------------------------------------
+# Audit
+# ---------------------------------------------------------------------------
+
+audit:
+  chain: sha256_linked           # SHA-256 hash-linked, append-only
+  signing: ed25519               # Ed25519-signed on export
+  export_schedule: "0 2 * * *"   # nightly export at 02:00 UTC
+  retention_days: 2555           # 7 years (SOX)
+
+# ---------------------------------------------------------------------------
+# Webhooks
+# ---------------------------------------------------------------------------
+
+webhooks:
+  hold_escalation:
+    url: "${PAYMENT_WEBHOOK_URL}/atlasent/webhook"
+    events:
+      - decision.allow
+      - decision.deny
+      - hold.escalated
+    secret_env: ATLASENT_WEBHOOK_SECRET
+    retry:
+      max_attempts: 5
+      backoff: exponential

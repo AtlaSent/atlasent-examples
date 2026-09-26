@@ -1,0 +1,108 @@
+# hr-offboarding.yaml
+#
+# AtlaSent policy bundle for HR employee offboarding.
+# Load into the AtlaSent engine via the console or the API:
+#
+# NOTE: v1-policy-bundles is disabled in production and will return 404.
+# See atlasent-api/supabase/runtime-functions-disabled.json.
+# Use the AtlaSent Console UI to load policy bundles instead.
+#   curl -X POST https://api.atlasent.io/functions/v1/v1-policy-bundles \
+#     -H "Authorization: Bearer $ATLASENT_API_KEY" \
+#     -H "Content-Type: application/yaml" \
+#     --data-binary @policies/hr-offboarding.yaml
+#
+# Regulatory references:
+#   SOX Section 404   — IT general controls (access provisioning)
+#   NIST SP 800-53    — AC-2(j) account management upon termination
+#   SOC 2 Type II     — CC6.2 prior to issuing system credentials
+#   GDPR Article 5    — Storage limitation for employee data
+
+id: hr-offboarding
+version: "1.0.0"
+description: >
+  Fail-closed authorization policy for HR employee offboarding.
+  Enforces that only terminated employees may be offboarded, that an
+  authorized HR manager and valid auth token are present, and records
+  the full access revocation cascade scope in the audit chain.
+  Machine-executable is false: an HR manager must be present on every request.
+
+# ---------------------------------------------------------------------------
+# Global configuration
+# ---------------------------------------------------------------------------
+
+config:
+  fail_closed: true            # transport / evaluation errors -> deny
+  machine_executable: false    # automated agents cannot self-authorize offboarding
+  audit_all_decisions: true    # record allow AND deny to the audit chain
+  permit_ttl_seconds: 900      # single-use permits expire after 15 minutes
+
+# ---------------------------------------------------------------------------
+# Actor lists
+# ---------------------------------------------------------------------------
+
+lists:
+  authorized_hr_managers:
+    - hr.mgr@acme.com
+    - hr.director@acme.com
+    - hr.vp@acme.com
+
+# ---------------------------------------------------------------------------
+# Action rules
+# ---------------------------------------------------------------------------
+
+rules:
+
+  # -- hr.employee.offboard --------------------------------------------------
+  - action: hr.employee.offboard
+    description: >
+      Offboard a terminated employee, revoking access across all listed systems.
+      Requires terminated status, authorized HR manager, and valid auth token.
+    machine_executable: false
+    require:
+      all:
+        - field: context.employeeId
+          op: present
+          error: "DENY_MISSING_FIELD: missing required field: employeeId"
+        - field: context.authorizedBy
+          op: present
+          error: "DENY_MISSING_FIELD: missing required field: authorizedBy"
+        - field: context.hrAuthToken
+          op: present
+          error: "DENY_MISSING_AUTH: hrAuthToken is absent — HR auth token required"
+        - field: context.employeeStatus
+          op: eq
+          value: terminated
+          error: "DENY_INVALID_STATUS: employeeStatus must be terminated before offboarding"
+        - field: context.authorizedBy
+          op: in_list
+          list: authorized_hr_managers
+          error: "DENY_AUTHORITY: authorizedBy is not on the authorized HR manager list"
+        - field: context.effectiveDate
+          op: present
+          error: "DENY_MISSING_FIELD: missing required field: effectiveDate"
+    decision: allow
+
+# ---------------------------------------------------------------------------
+# Audit
+# ---------------------------------------------------------------------------
+
+audit:
+  chain: sha256_linked          # SHA-256 hash-linked, append-only
+  signing: ed25519              # Ed25519-signed on export
+  export_schedule: "0 2 * * *"  # nightly export at 02:00 UTC
+  retention_days: 2555          # 7 years (SOX retention requirement)
+
+# ---------------------------------------------------------------------------
+# Webhooks
+# ---------------------------------------------------------------------------
+
+webhooks:
+  decision_notify:
+    url: "${HRIS_WEBHOOK_URL}/atlasent/webhook"
+    events:
+      - decision.allow
+      - decision.deny
+    secret_env: ATLASENT_WEBHOOK_SECRET
+    retry:
+      max_attempts: 5
+      backoff: exponential

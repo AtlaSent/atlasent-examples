@@ -1,0 +1,8 @@
+{
+  "name": "atlasent-permit-flow",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": { "start": "tsx index.ts" },
+  "dependencies": { "@atlasent/sdk": "2.10.0" },
+  "devDependencies": { "tsx": "^4.7.3", "typescript": "^5.4.5" }
+}

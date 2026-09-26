@@ -1,0 +1,126 @@
+# clinical-data-access.yaml
+#
+# AtlaSent policy bundle for GxP clinical trial data access authorization.
+# Load into the AtlaSent engine via the console or the API:
+#
+# NOTE: v1-policy-bundles is disabled in production and will return 404.
+# See atlasent-api/supabase/runtime-functions-disabled.json.
+# Use the AtlaSent Console UI to load policy bundles instead.
+#   curl -X POST https://api.atlasent.io/functions/v1/v1-policy-bundles \
+#     -H "Authorization: Bearer $ATLASENT_API_KEY" \
+#     -H "Content-Type: application/yaml" \
+#     --data-binary @policies/clinical-data-access.yaml
+#
+# Regulatory references:
+#   21 CFR Part 11         — Electronic records / signatures
+#   21 CFR Part 50/56      — Informed consent / IRB requirements
+#   ICH E6 (R2) GCP §8    — Essential documents; data access traceability
+#   EU GDPR Art. 9         — Special categories of personal data
+#   HIPAA 45 CFR §164.312  — Access controls for PHI
+
+id: clinical-data-access
+version: "1.0.0"
+description: >
+  Fail-closed authorization policy for clinical trial data access.
+  AI agents are always denied (machine_executable=false); a human in the
+  loop is required for any clinical subject data access. Purpose must be
+  documented. Subject consent must be verified before access. All access
+  decisions are recorded in a tamper-evident audit trail per 21 CFR Part 11.
+
+# ---------------------------------------------------------------------------
+# Global configuration
+# ---------------------------------------------------------------------------
+
+config:
+  fail_closed: true            # transport / evaluation errors -> deny
+  machine_executable: false    # AI agents cannot access clinical data without human oversight
+  audit_all_decisions: true    # record allow AND deny to the audit chain
+  permit_ttl_seconds: 300      # single-use permits expire after 5 minutes
+
+# ---------------------------------------------------------------------------
+# Actor lists
+# ---------------------------------------------------------------------------
+
+lists:
+  authorized_researchers:
+    - dr.smith@clinicalresearch.example
+    - dr.jones@clinicalresearch.example
+    - data.mgr@clinicalresearch.example
+
+# ---------------------------------------------------------------------------
+# Action rules
+# ---------------------------------------------------------------------------
+
+rules:
+
+  # -- clinical.data.access --------------------------------------------------
+  - action: clinical.data.access
+    description: >
+      Access clinical trial subject data. AI agents are denied by policy
+      (machine_executable=false); human researchers require verified consent,
+      a documented purpose, and membership in the authorized researcher list.
+    machine_executable: false
+    require:
+      all:
+        - field: context.aiAgent
+          op: eq
+          value: false
+          error: >
+            DENY_AI_AGENT_NOT_PERMITTED: clinical.data.access has machine_executable=false
+            — AI agents cannot access clinical subject data without a human in the loop;
+            use protectToolCall() with human_in_the_loop=true for AI agent pipelines
+        - field: context.purpose
+          op: present
+          error: >
+            DENY_PURPOSE_MISSING: purpose field is required for clinical data access;
+            provide a documented purpose (e.g. protocol-review, safety-review, audit)
+        - field: context.purpose
+          op: not_empty
+          error: >
+            DENY_PURPOSE_MISSING: purpose may not be empty
+        - field: context.consentVerified
+          op: eq
+          value: true
+          error: >
+            DENY_CONSENT_NOT_VERIFIED: subject consent has not been verified
+            — access denied until consent is confirmed
+        - field: context.accessedBy
+          op: present
+          error: "missing required field: accessedBy"
+        - field: context.accessedBy
+          op: in_list
+          list: authorized_researchers
+          error: "DENY_AUTHORITY: accessedBy is not on the authorized researcher list"
+        - field: context.subjectId
+          op: present
+          error: "missing required field: subjectId"
+        - field: context.trialId
+          op: present
+          error: "missing required field: trialId"
+    decision: allow
+
+# ---------------------------------------------------------------------------
+# Audit
+# ---------------------------------------------------------------------------
+
+audit:
+  chain: sha256_linked           # SHA-256 hash-linked, append-only
+  signing: ed25519               # Ed25519-signed on export
+  export_schedule: "0 2 * * *"   # nightly export at 02:00 UTC
+  retention_days: 3650           # 10 years (ICH E6 GCP / 21 CFR Part 11)
+  include_denied: true           # denied access attempts must also be logged
+
+# ---------------------------------------------------------------------------
+# Webhooks
+# ---------------------------------------------------------------------------
+
+webhooks:
+  access_notify:
+    url: "${CTMS_WEBHOOK_URL}/atlasent/webhook"
+    events:
+      - decision.allow
+      - decision.deny
+    secret_env: ATLASENT_WEBHOOK_SECRET
+    retry:
+      max_attempts: 5
+      backoff: exponential

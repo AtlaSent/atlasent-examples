@@ -1,0 +1,189 @@
+name: Deploy Gate V2
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Gate and deploy with V2 action strings
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    env:
+      ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
+      ATLASENT_API_URL: ${{ secrets.ATLASENT_API_URL || 'https://api.atlasent.io/functions/v1' }}
+      SERVICE: checkout-api
+      TARGET_ENV: production
+      # V2 action string: deployment.production.execute
+      # Migrated from V1: production.deploy
+      ACTION_ID: deployment.production.execute
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Evaluate deployment.production.execute
+        id: evaluate
+        shell: bash
+        run: |
+          set -euo pipefail
+          body=$(jq -n \
+            --arg actor   "github-actions:${{ github.actor }}" \
+            --arg action  "$ACTION_ID" \
+            --arg service "$SERVICE" \
+            --arg env     "$TARGET_ENV" \
+            --arg sha     "${{ github.sha }}" \
+            --arg ref     "${{ github.ref }}" \
+            --arg run_id  "${{ github.run_id }}" \
+            --arg approved_by "${{ github.actor }}" \
+            --arg change_ticket "${CHANGE_TICKET:-}" \
+            --arg rollback_plan "${ROLLBACK_PLAN:-git revert HEAD}" \
+            '{
+              agent:  $actor,
+              action: $action,
+              context: {
+                deploymentId:  ("deploy-" + $run_id),
+                buildSha:      $sha,
+                service:       $service,
+                environment:   $env,
+                ref:           $ref,
+                approvedBy:    $approved_by,
+                changeTicket:  $change_ticket,
+                rollbackPlan:  $rollback_plan
+              }
+            }')
+          response=$(curl -fsS \
+            -H "authorization: Bearer $ATLASENT_API_KEY" \
+            -H "content-type: application/json" \
+            -d "$body" \
+            "$ATLASENT_API_URL/v1-evaluate")
+          decision=$(jq -r '.decision // .outcome' <<<"$response" | tr '[:upper:]' '[:lower:]')
+          permit_id=$(jq -r '.permitId // .permit_id // .permit.id // empty' <<<"$response")
+          audit_hash=$(jq -r '.auditHash // .audit_hash // empty' <<<"$response")
+          reason=$(jq -r '.reasons[0] // .reason // empty' <<<"$response")
+          echo "decision=$decision"   >> "$GITHUB_OUTPUT"
+          echo "permit_id=$permit_id" >> "$GITHUB_OUTPUT"
+          echo "audit_hash=$audit_hash" >> "$GITHUB_OUTPUT"
+          echo "reason=$reason"       >> "$GITHUB_OUTPUT"
+          echo "AtlaSent V2 decision: $decision"
+          echo "AtlaSent permit:      $permit_id"
+          echo "AtlaSent audit:       $audit_hash"
+          echo "AtlaSent reason:      $reason"
+          test "$decision" = "allow"
+          test -n "$permit_id"
+
+      - name: Verify permit
+        shell: bash
+        run: |
+          set -euo pipefail
+          body=$(jq -n \
+            --arg permit_id "${{ steps.evaluate.outputs.permit_id }}" \
+            --arg actor     "github-actions:${{ github.actor }}" \
+            --arg action    "$ACTION_ID" \
+            --arg service   "$SERVICE" \
+            --arg env       "$TARGET_ENV" \
+            '{permit_id:$permit_id, agent:$actor, action:$action,
+              context:{service:$service, environment:$env}}')
+          response=$(curl -fsS \
+            -H "authorization: Bearer $ATLASENT_API_KEY" \
+            -H "content-type: application/json" \
+            -d "$body" \
+            "$ATLASENT_API_URL/v1-verify-permit")
+          valid=$(jq -r '.valid // (.status == "valid") // false' <<<"$response")
+          echo "AtlaSent permit verification: $valid"
+          test "$valid" = "true"
+
+      - name: Deploy checkout-api
+        run: |
+          echo "Deploying $SERVICE to $TARGET_ENV at ${{ github.sha }}"
+          # Replace this line with your deployment command.
+
+      - name: Audit evidence
+        if: always()
+        run: |
+          echo "action=deployment.production.execute"
+          echo "service=$SERVICE"
+          echo "environment=$TARGET_ENV"
+          echo "ref=${{ github.ref }}"
+          echo "sha=${{ github.sha }}"
+          echo "run_id=${{ github.run_id }}"
+          echo "decision=${{ steps.evaluate.outputs.decision }}"
+          echo "permit_id=${{ steps.evaluate.outputs.permit_id }}"
+          echo "audit_hash=${{ steps.evaluate.outputs.audit_hash }}"
+          echo "reason=${{ steps.evaluate.outputs.reason }}"
+
+  rollback:
+    name: Rollback gate (deployment.rollback.execute)
+    runs-on: ubuntu-latest
+    if: failure() && github.event_name == 'workflow_dispatch'
+    needs: [deploy]
+    permissions:
+      contents: read
+      deployments: write
+    env:
+      ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
+      ATLASENT_API_URL: ${{ secrets.ATLASENT_API_URL || 'https://api.atlasent.io/functions/v1' }}
+      SERVICE: checkout-api
+      TARGET_ENV: production
+      ROLLBACK_ACTION: deployment.rollback.execute
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Evaluate deployment.rollback.execute
+        id: rollback-evaluate
+        shell: bash
+        run: |
+          set -euo pipefail
+          body=$(jq -n \
+            --arg actor        "github-actions:${{ github.actor }}" \
+            --arg action       "$ROLLBACK_ACTION" \
+            --arg service      "$SERVICE" \
+            --arg env          "$TARGET_ENV" \
+            --arg incident_id  "${INCIDENT_ID:-INC-UNKNOWN}" \
+            --arg target       "${ROLLBACK_TARGET:-${{ github.sha }}^1}" \
+            --arg authorized   "${{ github.actor }}" \
+            --arg reason       "Deployment failed — initiating automated rollback" \
+            '{
+              agent:  $actor,
+              action: $action,
+              context: {
+                incidentId:      $incident_id,
+                rollbackTarget:  $target,
+                authorizedBy:    $authorized,
+                reason:          $reason,
+                service:         $service,
+                environment:     $env
+              }
+            }')
+          response=$(curl -fsS \
+            -H "authorization: Bearer $ATLASENT_API_KEY" \
+            -H "content-type: application/json" \
+            -d "$body" \
+            "$ATLASENT_API_URL/v1-evaluate")
+          decision=$(jq -r '.decision // .outcome' <<<"$response" | tr '[:upper:]' '[:lower:]')
+          permit_id=$(jq -r '.permitId // .permit_id // .permit.id // empty' <<<"$response")
+          echo "decision=$decision"   >> "$GITHUB_OUTPUT"
+          echo "permit_id=$permit_id" >> "$GITHUB_OUTPUT"
+          echo "AtlaSent rollback decision: $decision"
+          test "$decision" = "allow"
+          test -n "$permit_id"
+
+      - name: Execute rollback
+        run: |
+          echo "Rolling back $SERVICE in $TARGET_ENV"
+          echo "Incident: ${INCIDENT_ID:-INC-UNKNOWN}"
+          echo "Rollback permit: ${{ steps.rollback-evaluate.outputs.permit_id }}"
+          # Replace with your rollback command, e.g.:
+          # git revert HEAD && git push origin main
+
+      - name: Rollback audit evidence
+        if: always()
+        run: |
+          echo "action=deployment.rollback.execute"
+          echo "service=$SERVICE"
+          echo "environment=$TARGET_ENV"
+          echo "decision=${{ steps.rollback-evaluate.outputs.decision }}"
+          echo "permit_id=${{ steps.rollback-evaluate.outputs.permit_id }}"

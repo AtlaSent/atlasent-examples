@@ -1,0 +1,144 @@
+name: Sign release (cosign keyless)
+
+# R4 release signing — uses Sigstore keyless signing (OIDC via GitHub Actions).
+# No long-lived signing secret is required.
+#
+# Triggers on v* tag pushes and produces cosign bundle files uploaded to
+# the GitHub Release as provenance artifacts.
+#
+# Required job-level permissions:
+#   id-token: write   — OIDC token for Sigstore Fulcio CA
+#   contents: write   — create GitHub Release and upload assets
+#   attestations: write — GitHub-native attestation alongside Sigstore
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  # ── AtlaSent release gate ──────────────────────────────────────────
+  # Dogfooding fix: this workflow signed and published a GitHub Release
+  # on every v* tag push with no AtlaSent evaluate/permit gate at all
+  # (found during a dogfooding audit of consequential actions AtlaSent's
+  # own coding agents can take against AtlaSent's own infrastructure).
+  # Not cross-checked against this repo's seeded policy -- if
+  # `package.release` isn't provisioned for this repo/context, the gate
+  # denies by design.
+  gate:
+    name: AtlaSent release gate
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+      statuses: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: AtlaSent release gate
+        uses: Atlasent/atlasent-action@v1
+        env:
+          ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
+        with:
+          action: package.release
+          actor: ${{ github.actor }}
+          environment: production
+          api-url: https://api.atlasent.io/functions/v1
+          context: '{"ref": "${{ github.ref }}", "repo": "${{ github.repository }}"}'
+
+  sign-release:
+    name: Cosign keyless release signing
+    needs: gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out tag
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: 'v2.4.1'
+
+      - name: Derive version from tag
+        id: ver
+        run: |
+          # This step's output feeds directly into the GitHub Release's
+          # tag_name/name below. On a real v* tag push, GITHUB_REF is
+          # refs/tags/v<version> and the strip is exact. But this
+          # workflow's workflow_dispatch trigger declares no inputs and
+          # previously had no guard here at all -- a manual dispatch from
+          # any ref (e.g. main) left GITHUB_REF as something like
+          # refs/heads/main, the #refs/tags/ strip was a no-op, and the
+          # raw ref string flowed straight into the published release's
+          # tag_name: a real mistagging risk (same bug class fixed in
+          # atlasent-verify's release.yml, PR #41). Fail closed instead of
+          # silently tagging a release with a branch ref.
+          case "${{ github.ref }}" in
+            refs/tags/v*)
+              TAG="${GITHUB_REF#refs/tags/}"
+              ;;
+            *)
+              echo "::error::Must run FROM a v<semver> release tag (push that tag, or select it as the workflow_dispatch ref), not ${{ github.ref }}."
+              exit 1
+              ;;
+          esac
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Build release archive
+        id: bundle
+        run: |
+          TAG="${{ steps.ver.outputs.tag }}"
+          ARCHIVE="atlasent-examples-${TAG}.tar.gz"
+          git archive --format=tar.gz --prefix="atlasent-examples-${TAG}/" \
+            -o "${ARCHIVE}" HEAD
+          sha256sum "${ARCHIVE}" > "${ARCHIVE}.sha256"
+          echo "archive=${ARCHIVE}" >> "$GITHUB_OUTPUT"
+
+      - name: Sign archive with cosign (keyless)
+        env:
+          COSIGN_EXPERIMENTAL: '1'
+        run: |
+          ARCHIVE="${{ steps.bundle.outputs.archive }}"
+          cosign sign-blob --yes \
+            --output-signature "${ARCHIVE}.sig" \
+            --output-certificate "${ARCHIVE}.crt" \
+            --bundle "${ARCHIVE}.bundle" \
+            "${ARCHIVE}"
+
+      - name: GitHub-native attestation
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: ${{ steps.bundle.outputs.archive }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: ${{ steps.ver.outputs.tag }}
+          draft: false
+          body: |
+            ## Release ${{ steps.ver.outputs.tag }}
+
+            Verify the release archive with cosign:
+
+            ```bash
+            cosign verify-blob \
+              --certificate-identity-regexp "https://github.com/Atlasent/atlasent-examples" \
+              --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+              --signature atlasent-examples-${{ steps.ver.outputs.tag }}.tar.gz.sig \
+              --bundle atlasent-examples-${{ steps.ver.outputs.tag }}.tar.gz.bundle \
+              atlasent-examples-${{ steps.ver.outputs.tag }}.tar.gz
+            ```
+          files: |
+            ${{ steps.bundle.outputs.archive }}
+            ${{ steps.bundle.outputs.archive }}.sig
+            ${{ steps.bundle.outputs.archive }}.crt
+            ${{ steps.bundle.outputs.archive }}.bundle
+            ${{ steps.bundle.outputs.archive }}.sha256

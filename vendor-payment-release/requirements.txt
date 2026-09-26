@@ -1,0 +1,6 @@
+# Vendor payment release quickstart requires the atlasent SDK.
+atlasent==2.10.0
+
+# Offline audit-bundle verification requires Ed25519 from cryptography.
+# No atlasent SDK or network required for offline verification.
+cryptography>=41

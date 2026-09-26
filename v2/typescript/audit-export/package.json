@@ -1,0 +1,8 @@
+{
+  "name": "atlasent-audit-export",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": { "start": "tsx index.ts" },
+  "dependencies": { "@atlasent/sdk": "^1.5.0" },
+  "devDependencies": { "tsx": "^4.7.3", "typescript": "^5.4.5" }
+}

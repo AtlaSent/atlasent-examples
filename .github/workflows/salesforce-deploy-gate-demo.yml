@@ -1,0 +1,43 @@
+name: salesforce-deploy-gate-demo
+
+on:
+  push:
+    paths:
+      - "salesforce-deploy-gate/**"
+      - ".github/workflows/salesforce-deploy-gate-demo.yml"
+  pull_request:
+    paths:
+      - "salesforce-deploy-gate/**"
+      - ".github/workflows/salesforce-deploy-gate-demo.yml"
+
+jobs:
+  offline-smoke:
+    name: Offline stub + build + type check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: salesforce-deploy-gate
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Unit test connector CLI parsing (fixture-based, no real sf/suitecloud)
+        run: npm test
+
+      - name: Build deploy plan + digest (offline)
+        run: bash build.sh
+
+      - name: Run demo (offline stub — no API key needed)
+        run: npm run demo
+
+      - name: Run demo with USE_REAL_CLI=true (sf/suitecloud absent in CI — verifies fallback path)
+        run: USE_REAL_CLI=true npm run demo

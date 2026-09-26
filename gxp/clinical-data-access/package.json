@@ -1,0 +1,21 @@
+{
+  "name": "gxp-clinical-data-access",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "AtlaSent GxP clinical data access authorization demo (TypeScript)",
+  "scripts": {
+    "demo": "tsx main.ts",
+    "start": "python main.py",
+    "start:ts": "tsx main.ts",
+    "mock": "npx @atlasent/sdk mock"
+  },
+  "dependencies": {
+    "@atlasent/sdk": "2.10.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.41",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}

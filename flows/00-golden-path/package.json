@@ -1,0 +1,17 @@
+{
+  "name": "atlasent-flow-00-golden-path",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx index.ts",
+    "dry-run": "GOLDEN_PATH_DRY_RUN=1 tsx index.ts"
+  },
+  "dependencies": {
+    "@atlasent/sdk": "2.10.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.3",
+    "typescript": "^5.4.5"
+  }
+}

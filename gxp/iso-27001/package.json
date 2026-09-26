@@ -1,0 +1,12 @@
+{
+  "name": "gxp-iso-27001-example",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ISO/IEC 27001:2022 ISMS authorization demo",
+  "scripts": {
+    "start": "npx tsx main.ts"
+  },
+  "dependencies": {
+    "@atlasent/sdk": "2.10.0"
+  }
+}

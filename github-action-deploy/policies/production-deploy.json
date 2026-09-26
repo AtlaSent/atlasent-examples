@@ -1,0 +1,20 @@
+{
+  "action_type": "production.deploy",
+  "description": "Deploy Gate V1 production deployment policy",
+  "rules": {
+    "templates": [
+      {
+        "decision": "deny",
+        "deny_code": "OUTSIDE_CHANGE_WINDOW",
+        "when": { "field": "context.change_window", "eq": false }
+      },
+      {
+        "decision": "deny",
+        "deny_code": "INSUFFICIENT_APPROVALS",
+        "require_approvals": 2,
+        "when": { "field": "context.environment", "eq": "production" }
+      },
+      { "decision": "allow" }
+    ]
+  }
+}

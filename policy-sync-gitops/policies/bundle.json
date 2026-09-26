@@ -1,0 +1,26 @@
+[
+  {
+    "name": "production-deploy-gate",
+    "body": "allow if actor.role == 'deployer' and time.hour >= 9 and time.hour < 17",
+    "description": "Restrict production deploys to business hours (09:00–17:00 UTC)",
+    "tags": ["deployment", "production"]
+  },
+  {
+    "name": "financial-approval-threshold",
+    "body": "allow if amount_usd < 10000 or actor.role == 'finance_approver'",
+    "description": "Require finance approver role for transactions >= $10,000",
+    "tags": ["financial", "approval"]
+  },
+  {
+    "name": "database-schema-change",
+    "body": "allow if actor.role in ['dba', 'senior_engineer'] and context.reviewed == true",
+    "description": "Database schema changes require DBA or senior engineer with peer review",
+    "tags": ["database", "change-management"]
+  },
+  {
+    "name": "secret-rotation",
+    "body": "allow if actor.role in ['security_engineer', 'sre'] or actor.id == context.requester_id",
+    "description": "Secret rotation allowed by security team or the original secret owner",
+    "tags": ["secrets", "security"]
+  }
+]

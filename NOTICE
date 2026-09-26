@@ -1,0 +1,19 @@
+AtlaSent Examples
+Copyright (c) 2025 AtlaSent Systems Inc.
+
+LICENSING
+---------
+This software is licensed under the MIT License.
+See LICENSE for the full license text.
+
+ATTRIBUTION
+-----------
+Examples in this repository demonstrate usage of the AtlaSent platform.
+The AtlaSent core runtime (atlasent-api, atlasent-console,
+atlasent-control-plane) is governed by the AtlaSent Software License 1.0.
+
+For commercial licensing of core infrastructure: licensing@atlasent.io
+
+TRADEMARKS
+----------
+"AtlaSent" and the AtlaSent logo are trademarks of AtlaSent Systems Inc.

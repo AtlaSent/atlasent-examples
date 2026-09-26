@@ -1,0 +1,7 @@
+set dotenv-load := true
+
+default: run
+
+# Launch Claude Code in this directory — .mcp.json wires in AtlaSent.
+run:
+    claude

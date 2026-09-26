@@ -1,0 +1,42 @@
+# vendor-payment-release.yaml
+#
+# AtlaSent policy bundle for vendor payment release authorization.
+# Load into the AtlaSent engine via the console or the API:
+#
+# NOTE: v1-policy-bundles is disabled in production and will return 404.
+# See atlasent-api/supabase/runtime-functions-disabled.json.
+# Use the AtlaSent Console UI to load policy bundles instead.
+#   curl -X POST https://api.atlasent.io/functions/v1/v1-policy-bundles \
+#     -H "Authorization: Bearer $ATLASENT_API_KEY" \
+#     -H "Content-Type: application/yaml" \
+#     --data-binary @policies/vendor-payment-release.yaml
+
+policy_pack: vendor-payment-release-v1
+version: "1.0"
+
+rules:
+  - id: amount-threshold-dual-approval
+    description: Payments above $50,000 require dual approval
+    condition:
+      field: context.amount
+      op: gt
+      value: 50000
+    require:
+      dual_approval: true
+
+  - id: amount-threshold-cfo
+    description: Payments above $250,000 require CFO approval
+    condition:
+      field: context.amount
+      op: gt
+      value: 250000
+    require:
+      approver_role: cfo
+
+  - id: authorized-submitter
+    description: Submitter must be in the authorized AP certifiers group
+    condition:
+      field: context.authorizedBy
+      op: in_group
+      value: ap-certifiers
+    on_fail: DENY_AUTHORITY

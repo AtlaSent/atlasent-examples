@@ -1,0 +1,64 @@
+{
+  "scenarios": [
+    {
+      "id": "gp-01-normal-deploy",
+      "title": "Normal production deploy — allowed",
+      "narrative": "Senior release engineer promotes a tagged release during business hours. Baseline risk, clean decision, permit issued.",
+      "expect": "allow",
+      "request": {
+        "actor": { "id": "maria.chen@acme.test", "type": "user", "role": "release-engineer" },
+        "action": { "type": "production.deploy", "description": "Promote checkout-api v4.12.0 to production" },
+        "target": { "id": "checkout-api", "type": "service", "environment": "production" },
+        "context": { "time": "2026-04-23T15:42:00Z", "source": "github-actions" }
+      }
+    },
+    {
+      "id": "gp-02-afterhours-unfamiliar",
+      "title": "After-hours deploy from unfamiliar actor — denied",
+      "narrative": "A contractor service account with no deploy history attempts a production push at 2am, no MFA. Multiple risk factors fire; AtlaSent denies.",
+      "expect": "deny",
+      "request": {
+        "actor": { "id": "svc-contractor-07", "type": "service", "role": "contractor" },
+        "action": { "type": "production.deploy", "description": "Push checkout-api hotfix to production" },
+        "target": { "id": "checkout-api", "type": "service", "environment": "production" },
+        "context": { "time": "2026-04-23T02:14:00Z", "source": "manual", "mfa": false }
+      }
+    },
+    {
+      "id": "gp-03-stepup-recovery",
+      "title": "Same deploy after MFA step-up + approver — allowed",
+      "narrative": "The contractor completes step-up auth and an on-call engineer approves in Slack. AtlaSent re-evaluates and allows with a short-lived permit.",
+      "expect": "allow",
+      "request": {
+        "actor": { "id": "svc-contractor-07", "type": "service", "role": "contractor", "stepUp": "mfa+approver" },
+        "action": { "type": "production.deploy", "description": "Push checkout-api hotfix to production" },
+        "target": { "id": "checkout-api", "type": "service", "environment": "production" },
+        "context": { "time": "2026-04-23T02:19:00Z", "source": "manual", "mfa": true, "approver": "maria.chen@acme.test" }
+      }
+    },
+    {
+      "id": "gp-04-lims-write",
+      "title": "Regulated LIMS write — allowed, audit sealed",
+      "narrative": "A lab analyst posts an HbA1c result for a clinical sample. AtlaSent issues a single-use permit bound to the sample, assay, and analyst; the write is sealed into the audit trail on permit consume.",
+      "expect": "allow",
+      "request": {
+        "actor": { "id": "analyst-alice", "type": "user", "role": "lab-analyst" },
+        "action": { "type": "lims.write", "description": "Post hba1c result for S-2026-0001" },
+        "target": { "id": "S-2026-0001", "type": "sample", "system": "lims", "environment": "production" },
+        "context": { "assay": "hba1c", "value": 6.3 }
+      }
+    },
+    {
+      "id": "gp-05-bulk-export",
+      "title": "Bulk clinical export without override — denied",
+      "narrative": "Same analyst tries to export 10,000 subject records to personal cloud storage. Separation of duties fires; AtlaSent denies and surfaces the override path.",
+      "expect": "deny",
+      "request": {
+        "actor": { "id": "analyst-alice", "type": "user", "role": "lab-analyst" },
+        "action": { "type": "clinical.export", "description": "Export 10000 subject records" },
+        "target": { "id": "study-CT-2099", "type": "study", "system": "edc", "environment": "production" },
+        "context": { "rows": 10000, "destination": "personal-gdrive" }
+      }
+    }
+  ]
+}

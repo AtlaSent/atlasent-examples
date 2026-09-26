@@ -1,0 +1,113 @@
+# gdpr-erasure.yaml
+#
+# AtlaSent policy bundle for GDPR Article 17 right-to-erasure requests.
+# Load into the AtlaSent engine via the console or the API:
+#
+# NOTE: v1-policy-bundles is disabled in production and will return 404.
+# See atlasent-api/supabase/runtime-functions-disabled.json.
+# Use the AtlaSent Console UI to load policy bundles instead.
+#   curl -X POST https://api.atlasent.io/functions/v1/v1-policy-bundles \
+#     -H "Authorization: Bearer $ATLASENT_API_KEY" \
+#     -H "Content-Type: application/yaml" \
+#     --data-binary @policies/gdpr-erasure.yaml
+#
+# Regulatory references:
+#   GDPR Article 12(3) — response timeline (one month)
+#   GDPR Article 12(6) — identity verification before processing
+#   GDPR Article 17    — right to erasure ("right to be forgotten")
+#   GDPR Article 17(3) — legal basis exceptions to erasure
+#   GDPR Article 5(2)  — accountability principle (audit trail)
+#   GDPR Article 37-39 — Data Protection Officer obligations
+
+id: gdpr-erasure
+version: "1.0.0"
+description: >
+  Fail-closed authorization policy for GDPR Article 17 customer data deletion.
+  Enforces identity verification, 30-day response window, legal hold checks,
+  and DPO sign-off before any customer data may be deleted. Machine-executable
+  is false: the Data Protection Officer must be present on every deletion request.
+
+# ---------------------------------------------------------------------------
+# Global configuration
+# ---------------------------------------------------------------------------
+
+config:
+  fail_closed: true            # transport / evaluation errors -> deny
+  machine_executable: false    # automated scripts cannot self-authorize bulk deletions
+  audit_all_decisions: true    # record allow AND deny (accountability principle Article 5(2))
+  permit_ttl_seconds: 900      # single-use permits expire after 15 minutes
+
+# ---------------------------------------------------------------------------
+# Actor lists
+# ---------------------------------------------------------------------------
+
+lists:
+  authorized_dpo_list:
+    - dpo@acme.com
+    - privacy.lead@acme.com
+    - dpo.deputy@acme.com
+
+# ---------------------------------------------------------------------------
+# Action rules
+# ---------------------------------------------------------------------------
+
+rules:
+
+  # -- customer.data.delete --------------------------------------------------
+  - action: customer.data.delete
+    description: >
+      Process a GDPR Article 17 right-to-erasure request for customer personal data.
+      Requires verified identity, active 30-day window, no legal hold, and DPO sign-off.
+    machine_executable: false
+    require:
+      all:
+        - field: context.requestId
+          op: present
+          error: "DENY_MISSING_FIELD: missing required field: requestId"
+        - field: context.customerId
+          op: present
+          error: "DENY_MISSING_FIELD: missing required field: customerId"
+        - field: context.requestReceivedDate
+          op: present
+          error: "DENY_MISSING_FIELD: missing required field: requestReceivedDate"
+        - field: context.identityVerified
+          op: eq
+          value: true
+          error: "DENY_IDENTITY_NOT_VERIFIED: data subject identity must be verified before erasure"
+        - field: context.requestWindowExpired
+          op: eq
+          value: false
+          error: "DENY_REQUEST_WINDOW_EXPIRED: 30-day GDPR Article 17 response window has expired"
+        - field: context.dpoSignOffBy
+          op: present
+          error: "DENY_DPO_SIGNOFF_MISSING: dpoSignOffBy is absent — DPO authorization required"
+        - field: context.dpoSignOffBy
+          op: in_list
+          list: authorized_dpo_list
+          error: "DENY_DPO_SIGNOFF_MISSING: dpoSignOffBy is not on the authorized DPO list"
+    decision: allow
+
+# ---------------------------------------------------------------------------
+# Audit
+# ---------------------------------------------------------------------------
+
+audit:
+  chain: sha256_linked           # SHA-256 hash-linked, append-only
+  signing: ed25519               # Ed25519-signed on export
+  export_schedule: "0 2 * * *"   # nightly export at 02:00 UTC
+  retention_days: 1095           # 3 years (GDPR accountability, Article 5(2))
+
+# ---------------------------------------------------------------------------
+# Webhooks
+# ---------------------------------------------------------------------------
+
+webhooks:
+  decision_notify:
+    url: "${DSR_WEBHOOK_URL}/atlasent/webhook"
+    events:
+      - decision.allow
+      - decision.deny
+    secret_env: ATLASENT_WEBHOOK_SECRET
+    retry:
+      max_attempts: 5
+      backoff: exponential

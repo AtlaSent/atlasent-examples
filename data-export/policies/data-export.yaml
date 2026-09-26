@@ -1,0 +1,48 @@
+# data-export.yaml
+#
+# AtlaSent policy bundle for customer data export authorization.
+# Load into the AtlaSent engine via the console or the API:
+#
+# NOTE: v1-policy-bundles is disabled in production and will return 404.
+# See atlasent-api/supabase/runtime-functions-disabled.json.
+# Use the AtlaSent Console UI to load policy bundles instead.
+#   curl -X POST https://api.atlasent.io/functions/v1/v1-policy-bundles \
+#     -H "Authorization: Bearer $ATLASENT_API_KEY" \
+#     -H "Content-Type: application/yaml" \
+#     --data-binary @policies/data-export.yaml
+
+policy_pack: customer-data-export-v1
+version: "1.0"
+
+rules:
+  - id: pii-destination-allowlist
+    description: PII exports only allowed to verified destinations
+    condition:
+      and:
+        - field: context.containsPii
+          op: eq
+          value: true
+        - field: context.destination
+          op: not_in
+          value: "${verified_destinations}"
+    decision: DENY_DESTINATION_UNVERIFIED
+
+  - id: purpose-required-for-pii
+    description: PII exports require a documented purpose code
+    condition:
+      and:
+        - field: context.containsPii
+          op: eq
+          value: true
+        - field: context.purpose
+          op: missing
+    decision: DENY_PURPOSE_MISSING
+
+  - id: row-cap
+    description: Exports exceeding row cap require escalation
+    condition:
+      field: context.rowsRequested
+      op: gt
+      value: 100000
+    require:
+      escalation: true

@@ -1,0 +1,18 @@
+{
+  "name": "atlasent-usage-metering",
+  "version": "1.0.0",
+  "description": "Example: pull usage metering data — summary and detailed evaluation list",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx index.ts"
+  },
+  "dependencies": {
+    "@atlasent/sdk": "2.10.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.4.0"
+  }
+}

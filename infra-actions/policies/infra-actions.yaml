@@ -1,0 +1,188 @@
+# infra-actions.yaml
+#
+# AtlaSent policy bundle for infrastructure action authorization.
+# Load into the AtlaSent engine via the console or the API:
+#
+# NOTE: v1-policy-bundles is disabled in production and will return 404.
+# See atlasent-api/supabase/runtime-functions-disabled.json.
+# Use the AtlaSent Console UI to load policy bundles instead.
+#   curl -X POST https://api.atlasent.io/functions/v1/v1-policy-bundles \
+#     -H "Authorization: Bearer $ATLASENT_API_KEY" \
+#     -H "Content-Type: application/yaml" \
+#     --data-binary @policies/infra-actions.yaml
+#
+# See also: atlasent-examples/protected-actions/ (original protected actions examples)
+
+id: infra-actions
+version: "1.0.0"
+description: >
+  Fail-closed authorization policy for destructive infrastructure operations.
+  terminate/delete actions require incident_commander role. stop actions require
+  on_call_engineer minimum. All actions require changeTicket. Data-destructive
+  actions (drop/delete) require backupVerified=true. github.repos.delete always
+  requires human review (machine_executable=false).
+
+# ---------------------------------------------------------------------------
+# Global configuration
+# ---------------------------------------------------------------------------
+
+config:
+  fail_closed: true            # transport / evaluation errors -> deny
+  audit_all_decisions: true    # record allow AND deny to the audit chain
+  permit_ttl_seconds: 300      # single-use permits expire after 5 minutes
+
+# ---------------------------------------------------------------------------
+# Role definitions
+# ---------------------------------------------------------------------------
+
+roles:
+  incident_commander:
+    members:
+      - ic.oncall@acme.example
+      - sre.lead@acme.example
+      - eng.director@acme.example
+
+  on_call_engineer:
+    members:
+      - ic.oncall@acme.example
+      - sre.lead@acme.example
+      - eng.director@acme.example
+      - oncall.sre@acme.example
+
+# ---------------------------------------------------------------------------
+# Action rules
+# ---------------------------------------------------------------------------
+
+rules:
+
+  # -- aws.ec2.stop_instance -------------------------------------------------
+  - action: aws.ec2.stop_instance
+    description: >
+      Stop an EC2 instance. Requires on_call_engineer role and change ticket.
+      Stopping is recoverable — lower authority than terminate.
+    require:
+      all:
+        - field: context.instanceId
+          op: present
+          error: "missing required field: instanceId"
+        - field: context.authorizedBy
+          op: in_role
+          role: on_call_engineer
+          error: "DENY_AUTHORITY: authorizedBy does not have on_call_engineer role required to stop an EC2 instance"
+        - field: context.changeTicket
+          op: present
+          error: "DENY_MISSING_CHANGE_TICKET: changeTicket is required for all infrastructure stop actions"
+        - field: context.changeTicket
+          op: not_empty
+          error: "DENY_MISSING_CHANGE_TICKET: changeTicket may not be empty"
+    decision: allow
+
+  # -- aws.ec2.terminate_instance --------------------------------------------
+  - action: aws.ec2.terminate_instance
+    description: >
+      Permanently terminate an EC2 instance (irreversible). Requires
+      incident_commander role and change ticket.
+    require:
+      all:
+        - field: context.instanceId
+          op: present
+          error: "missing required field: instanceId"
+        - field: context.authorizedBy
+          op: in_role
+          role: incident_commander
+          error: "DENY_AUTHORITY: authorizedBy does not have incident_commander role required to terminate an EC2 instance (irreversible)"
+        - field: context.changeTicket
+          op: present
+          error: "DENY_MISSING_CHANGE_TICKET: changeTicket is required for terminate actions"
+        - field: context.changeTicket
+          op: not_empty
+          error: "DENY_MISSING_CHANGE_TICKET: changeTicket may not be empty"
+    decision: allow
+
+  # -- github.repos.delete ---------------------------------------------------
+  - action: github.repos.delete
+    description: >
+      Delete a GitHub repository (irreversible). machine_executable=false:
+      no automated pipeline may delete a repository. Human review is always
+      required in the AtlaSent console.
+    machine_executable: false
+    decision: deny
+    reasons:
+      - "DENY_HUMAN_REVIEW_REQUIRED: github.repos.delete has machine_executable=false — repository deletion always requires human review in the AtlaSent console"
+
+  # -- database.table.drop ---------------------------------------------------
+  - action: database.table.drop
+    description: >
+      Drop a database table (irreversible). Requires incident_commander role,
+      verified backup, and change ticket.
+    require:
+      all:
+        - field: context.objectName
+          op: present
+          error: "missing required field: objectName"
+        - field: context.authorizedBy
+          op: in_role
+          role: incident_commander
+          error: "DENY_AUTHORITY: authorizedBy does not have incident_commander role required to drop a database table (irreversible)"
+        - field: context.backupVerified
+          op: eq
+          value: true
+          error: "DENY_BACKUP_NOT_VERIFIED: backupVerified must be true before dropping a table"
+        - field: context.changeTicket
+          op: present
+          error: "DENY_MISSING_CHANGE_TICKET: changeTicket is required for data-destructive actions"
+        - field: context.changeTicket
+          op: not_empty
+          error: "DENY_MISSING_CHANGE_TICKET: changeTicket may not be empty"
+    decision: allow
+
+  # -- database.volume.delete ------------------------------------------------
+  - action: database.volume.delete
+    description: >
+      Delete a database volume (irreversible). Requires incident_commander role,
+      verified backup, and change ticket.
+    require:
+      all:
+        - field: context.objectName
+          op: present
+          error: "missing required field: objectName"
+        - field: context.authorizedBy
+          op: in_role
+          role: incident_commander
+          error: "DENY_AUTHORITY: authorizedBy does not have incident_commander role required to delete a database volume (irreversible)"
+        - field: context.backupVerified
+          op: eq
+          value: true
+          error: "DENY_BACKUP_NOT_VERIFIED: backupVerified must be true before deleting a volume"
+        - field: context.changeTicket
+          op: present
+          error: "DENY_MISSING_CHANGE_TICKET: changeTicket is required for volume delete actions"
+        - field: context.changeTicket
+          op: not_empty
+          error: "DENY_MISSING_CHANGE_TICKET: changeTicket may not be empty"
+    decision: allow
+
+# ---------------------------------------------------------------------------
+# Audit
+# ---------------------------------------------------------------------------
+
+audit:
+  chain: sha256_linked           # SHA-256 hash-linked, append-only
+  signing: ed25519               # Ed25519-signed on export
+  export_schedule: "0 2 * * *"   # nightly export at 02:00 UTC
+  retention_days: 2555           # 7 years (SOX / change management)
+
+# ---------------------------------------------------------------------------
+# Webhooks
+# ---------------------------------------------------------------------------
+
+webhooks:
+  infra_notify:
+    url: "${INFRA_WEBHOOK_URL}/atlasent/webhook"
+    events:
+      - decision.allow
+      - decision.deny
+    secret_env: ATLASENT_WEBHOOK_SECRET
+    retry:
+      max_attempts: 5
+      backoff: exponential

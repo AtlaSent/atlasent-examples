@@ -1,0 +1,2 @@
+# Behavior events demo requires the atlasent SDK.
+atlasent==2.10.0

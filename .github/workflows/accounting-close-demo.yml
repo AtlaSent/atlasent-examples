@@ -1,0 +1,57 @@
+name: accounting-close-demo
+
+on:
+  push:
+    paths:
+      - "accounting-close/**"
+      - ".github/workflows/accounting-close-demo.yml"
+  pull_request:
+    paths:
+      - "accounting-close/**"
+      - ".github/workflows/accounting-close-demo.yml"
+
+jobs:
+  python-smoke:
+    name: Python offline smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: accounting-close/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r accounting-close/requirements.txt
+
+      - name: Run demo (offline stub — no API key needed)
+        run: python accounting-close/main.py
+
+      - name: Run vendor-master scenario (offline stub)
+        run: python accounting-close/vendor-master.py
+
+      - name: Run emergency-override scenario (offline stub)
+        run: python accounting-close/emergency-override.py
+
+  typescript-typecheck:
+    name: TypeScript type check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: accounting-close
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: accounting-close/package-lock.json
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Type check
+        run: npx tsc --noEmit

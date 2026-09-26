@@ -1,0 +1,19 @@
+{
+  "name": "atlasent-flow-01-deploy-gate",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx index.ts",
+    "test": "node --test contract.test.mjs",
+    "typecheck": "tsc --noEmit --target ES2022 --module NodeNext --moduleResolution NodeNext index.ts"
+  },
+  "dependencies": {
+    "@atlasent/sdk": "2.10.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "tsx": "^4.7.3",
+    "typescript": "^5.4.5"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "atlasent-browser-guard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Browser/edge runtime guard using AtlaSent with Vite — no process.env",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@atlasent/enforce": "2.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "vite": "^5.2.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

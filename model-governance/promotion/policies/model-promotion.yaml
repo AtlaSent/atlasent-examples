@@ -1,0 +1,123 @@
+# model-promotion.yaml
+#
+# AtlaSent policy bundle for ML model promotion to production.
+# Load into the AtlaSent engine via the console or the API:
+#
+# NOTE: v1-policy-bundles is disabled in production and will return 404.
+# See atlasent-api/supabase/runtime-functions-disabled.json.
+# Use the AtlaSent Console UI to load policy bundles instead.
+#   curl -X POST https://api.atlasent.io/functions/v1/v1-policy-bundles \
+#     -H "Authorization: Bearer $ATLASENT_API_KEY" \
+#     -H "Content-Type: application/yaml" \
+#     --data-binary @policies/model-promotion.yaml
+#
+# Regulatory references:
+#   EU AI Act Article 9  — risk management system
+#   EU AI Act Article 12 — logging and traceability
+#   EU AI Act Article 14 — human oversight
+#   ISO/IEC 42001:2023   — AI management system requirements
+
+id: model-promotion
+version: "1.0.0"
+description: >
+  Fail-closed authorization policy for ML model promotion to production.
+  Enforces safety check gates, AI safety reviewer sign-off, and staging
+  validation requirements before a model may be promoted to production.
+  Machine-executable is false: human ML lead and safety reviewer sign-off
+  are always required for production promotions.
+
+# ---------------------------------------------------------------------------
+# Global configuration
+# ---------------------------------------------------------------------------
+
+config:
+  fail_closed: true            # transport / evaluation errors -> deny
+  machine_executable: false    # CI/CD pipelines cannot self-authorize production promotion
+  audit_all_decisions: true    # record allow AND deny to the audit chain
+  permit_ttl_seconds: 900      # single-use permits expire after 15 minutes
+
+# ---------------------------------------------------------------------------
+# Actor lists
+# ---------------------------------------------------------------------------
+
+lists:
+  authorized_model_approvers:
+    - ml.lead@acme.com
+    - ml.director@acme.com
+    - ai.safety@acme.com
+    - mlops.lead@acme.com
+
+  safety_sign_off_reviewers:
+    - ai.safety@acme.com
+
+# ---------------------------------------------------------------------------
+# Action rules
+# ---------------------------------------------------------------------------
+
+rules:
+
+  # -- ml.model.promote -------------------------------------------------------
+  - action: ml.model.promote
+    description: >
+      Promote a validated ML model to a target environment (staging or production).
+      Production promotions require passing safety checks, AI safety reviewer
+      sign-off, and completed staging validation.
+    machine_executable: false
+    require:
+      all:
+        - field: context.modelId
+          op: present
+          error: "DENY_MISSING_FIELD: missing required field: modelId"
+        - field: context.modelVersion
+          op: present
+          error: "DENY_MISSING_FIELD: missing required field: modelVersion"
+        - field: context.targetEnvironment
+          op: present
+          error: "DENY_MISSING_FIELD: missing required field: targetEnvironment"
+        - field: context.approvedBy
+          op: present
+          error: "DENY_MISSING_FIELD: missing required field: approvedBy"
+        - field: context.safetyChecksPassed
+          op: eq
+          value: true
+          error: "DENY_SAFETY_CHECKS_FAILED: all safety evaluations must pass before promotion"
+        - field: context.safetySignOffBy
+          op: present
+          error: "DENY_SAFETY_SIGNOFF_MISSING: safetySignOffBy is absent — AI safety sign-off required"
+        - field: context.safetySignOffBy
+          op: in_list
+          list: safety_sign_off_reviewers
+          error: "DENY_SAFETY_SIGNOFF_MISSING: safetySignOffBy is not on the authorized safety reviewer list"
+        - field: context.approvedBy
+          op: in_list
+          list: authorized_model_approvers
+          error: "DENY_AUTHORITY: approvedBy is not on the authorized model approver list"
+        - field: context.evalReportUri
+          op: present
+          error: "DENY_MISSING_FIELD: missing required field: evalReportUri"
+    decision: allow
+
+# ---------------------------------------------------------------------------
+# Audit
+# ---------------------------------------------------------------------------
+
+audit:
+  chain: sha256_linked          # SHA-256 hash-linked, append-only
+  signing: ed25519              # Ed25519-signed on export
+  export_schedule: "0 2 * * *"  # nightly export at 02:00 UTC
+  retention_days: 1825          # 5 years (EU AI Act Article 12)
+
+# ---------------------------------------------------------------------------
+# Webhooks
+# ---------------------------------------------------------------------------
+
+webhooks:
+  decision_notify:
+    url: "${MLOPS_WEBHOOK_URL}/atlasent/webhook"
+    events:
+      - decision.allow
+      - decision.deny
+    secret_env: ATLASENT_WEBHOOK_SECRET
+    retry:
+      max_attempts: 5
+      backoff: exponential

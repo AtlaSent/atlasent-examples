@@ -1,0 +1,28 @@
+{
+  "action": "production.deploy",
+  "tests": [
+    {
+      "name": "metadata deploy with 2 CAB approvals inside change window",
+      "context": { "environment": "production", "approvals": 2, "change_window": true },
+      "expect": "allow"
+    },
+    {
+      "name": "live config edit (state-snapshot profile) with 2 approvals inside window",
+      "context": { "environment": "production", "approvals": 2, "change_window": true, "profile": "state_snapshot", "state_snapshot": "sha256-of-before-after" },
+      "expect": "allow"
+    },
+    {
+      "name": "outside change window is denied",
+      "context": { "environment": "production", "approvals": 2, "change_window": false },
+      "expect": "deny",
+      "expect_deny_code": "OUTSIDE_CHANGE_WINDOW"
+    },
+    {
+      "name": "only 1 CAB approval is denied",
+      "context": { "environment": "production", "approvals": 1, "change_window": true },
+      "expect": "deny",
+      "expect_deny_code": "INSUFFICIENT_APPROVALS"
+    }
+  ],
+  "notes": "An actor outside allow_actors (e.g. github:someone-else) is denied ACTOR_NOT_ALLOWED by the bundle's top-level allow_actors before any template runs — not expressible as a context-only fixture here."
+}

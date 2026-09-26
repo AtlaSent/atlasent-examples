@@ -1,0 +1,19 @@
+{
+  "name": "gxp-local-starter",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "AtlaSent GxP local-starter demo: multi-pack composition, local authorization, offline audit bundle verification",
+  "scripts": {
+    "start": "tsx main.ts",
+    "demo": "tsx main.ts"
+  },
+  "dependencies": {
+    "gxp-starter": "^0.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.7.3",
+    "typescript": "^5.4.5"
+  }
+}

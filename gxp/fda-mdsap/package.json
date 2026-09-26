@@ -1,0 +1,12 @@
+{
+  "name": "gxp-fda-mdsap-example",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MDSAP / ISO 13485 medical device QMS authorization demo",
+  "scripts": {
+    "start": "npx tsx main.ts"
+  },
+  "dependencies": {
+    "@atlasent/sdk": "2.10.0"
+  }
+}

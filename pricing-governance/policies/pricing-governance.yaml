@@ -1,0 +1,136 @@
+# pricing-governance.yaml
+#
+# AtlaSent policy bundle for pricing rule publication and discount approval.
+# Load into the AtlaSent engine via the console or the API:
+#
+# NOTE: v1-policy-bundles is disabled in production and will return 404.
+# See atlasent-api/supabase/runtime-functions-disabled.json.
+# Use the AtlaSent Console UI to load policy bundles instead.
+#   curl -X POST https://api.atlasent.io/functions/v1/v1-policy-bundles \
+#     -H "Authorization: Bearer $ATLASENT_API_KEY" \
+#     -H "Content-Type: application/yaml" \
+#     --data-binary @policies/pricing-governance.yaml
+#
+# Regulatory references:
+#   ASC 606-10-25   — revenue from contracts, variable consideration
+#   SOX Section 302 — management certification of financial controls
+#   COSO Framework  — control environment, delegation of authority
+#   SOC 2 Type II   — CC4.1 monitoring of controls
+
+id: pricing-governance
+version: "1.0.0"
+description: >
+  Fail-closed authorization policy for pricing rule publication and discount
+  approval. Enforces tiered discount authority (auto-approve <= 10%, CFO
+  required > 10%, hard deny > 40%) and pricing manager sign-off for all
+  rule publications. Machine-executable is false: sales bots cannot
+  self-approve discounts.
+
+# ---------------------------------------------------------------------------
+# Global configuration
+# ---------------------------------------------------------------------------
+
+config:
+  fail_closed: true            # transport / evaluation errors -> deny
+  machine_executable: false    # sales bots cannot self-approve discounts
+  audit_all_decisions: true    # record allow AND deny to the audit chain
+  permit_ttl_seconds: 900      # single-use permits expire after 15 minutes
+
+# ---------------------------------------------------------------------------
+# Actor lists
+# ---------------------------------------------------------------------------
+
+lists:
+  authorized_pricing_managers:
+    - pricing.mgr@acme.com
+    - pricing.director@acme.com
+    - revenue.ops@acme.com
+
+  authorized_cfo_list:
+    - cfo@acme.com
+    - cfo.deputy@acme.com
+
+# ---------------------------------------------------------------------------
+# Action rules
+# ---------------------------------------------------------------------------
+
+rules:
+
+  # -- pricing.rule.publish ---------------------------------------------------
+  - action: pricing.rule.publish
+    description: >
+      Publish a new pricing rule to the pricing engine. Requires pricing
+      manager authorization and an effective date.
+    machine_executable: false
+    require:
+      all:
+        - field: context.ruleId
+          op: present
+          error: "DENY_MISSING_FIELD: missing required field: ruleId"
+        - field: context.ruleType
+          op: present
+          error: "DENY_MISSING_FIELD: missing required field: ruleType"
+        - field: context.effectiveDate
+          op: present
+          error: "DENY_MISSING_FIELD: missing required field: effectiveDate"
+        - field: context.publishedBy
+          op: present
+          error: "DENY_AUTHORITY: publishedBy is absent — pricing manager sign-off required"
+        - field: context.publishedBy
+          op: in_list
+          list: authorized_pricing_managers
+          error: "DENY_AUTHORITY: publishedBy is not on the authorized pricing manager list"
+    decision: allow
+
+  # -- pricing.discount.approve -----------------------------------------------
+  - action: pricing.discount.approve
+    description: >
+      Approve a discount for a customer or deal. Discount tiers:
+        <= 10%: pricing manager auto-approval
+        > 10%:  CFO escalation required (cfoSignOffBy must be present)
+        > 40%:  hard deny — exceeds maximum delegated authority
+    machine_executable: false
+    require:
+      all:
+        - field: context.discountId
+          op: present
+          error: "DENY_MISSING_FIELD: missing required field: discountId"
+        - field: context.customerId
+          op: present
+          error: "DENY_MISSING_FIELD: missing required field: customerId"
+        - field: context.discountPct
+          op: present
+          error: "DENY_MISSING_FIELD: missing required field: discountPct"
+        - field: context.approvedBy
+          op: present
+          error: "DENY_AUTHORITY: approvedBy is absent — pricing manager required"
+        - field: context.approvedBy
+          op: in_list
+          list: authorized_pricing_managers
+          error: "DENY_AUTHORITY: approvedBy is not on the authorized pricing manager list"
+    decision: allow
+
+# ---------------------------------------------------------------------------
+# Audit
+# ---------------------------------------------------------------------------
+
+audit:
+  chain: sha256_linked          # SHA-256 hash-linked, append-only
+  signing: ed25519              # Ed25519-signed on export
+  export_schedule: "0 2 * * *"  # nightly export at 02:00 UTC
+  retention_days: 2555          # 7 years (SOX records retention)
+
+# ---------------------------------------------------------------------------
+# Webhooks
+# ---------------------------------------------------------------------------
+
+webhooks:
+  decision_notify:
+    url: "${CRM_WEBHOOK_URL}/atlasent/webhook"
+    events:
+      - decision.allow
+      - decision.deny
+    secret_env: ATLASENT_WEBHOOK_SECRET
+    retry:
+      max_attempts: 5
+      backoff: exponential

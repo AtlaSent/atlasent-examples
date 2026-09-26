@@ -1,0 +1,22 @@
+{
+  "action": "production.deploy",
+  "tests": [
+    {
+      "name": "production deploy with 2 approvals inside change window",
+      "context": { "environment": "production", "approvals": 2, "change_window": true },
+      "expect": "allow"
+    },
+    {
+      "name": "outside change window is denied",
+      "context": { "environment": "production", "approvals": 2, "change_window": false },
+      "expect": "deny",
+      "expect_deny_code": "OUTSIDE_CHANGE_WINDOW"
+    },
+    {
+      "name": "only 1 approval is denied",
+      "context": { "environment": "production", "approvals": 1, "change_window": true },
+      "expect": "deny",
+      "expect_deny_code": "INSUFFICIENT_APPROVALS"
+    }
+  ]
+}

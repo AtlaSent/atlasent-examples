@@ -1,0 +1,157 @@
+# behavior-events.yaml
+#
+# AtlaSent policy bundle for behavioral event sharing authorization.
+# Load into the AtlaSent engine via the console or the API:
+#
+# NOTE: v1-policy-bundles is disabled in production and will return 404.
+# See atlasent-api/supabase/runtime-functions-disabled.json.
+# Use the AtlaSent Console UI to load policy bundles instead.
+#   curl -X POST https://api.atlasent.io/functions/v1/v1-policy-bundles \
+#     -H "Authorization: Bearer $ATLASENT_API_KEY" \
+#     -H "Content-Type: application/yaml" \
+#     --data-binary @policies/behavior-events.yaml
+#
+# Phase 3 feature — requires privacy review before production use.
+# See README.md for the privacy review checklist.
+#
+# Regulatory references:
+#   EU GDPR Art. 6/9     — Lawfulness of processing; special categories
+#   CCPA / CPRA          — California Consumer Privacy Act
+#   COPPA                — Children's Online Privacy Protection Act (minor data)
+
+id: behavior-events
+version: "1.0.0"
+description: >
+  Fail-closed authorization policy for behavioral event sharing.
+  Sensitive categories (health.*, financial, minor) require consentVerified=true.
+  Minor data requires machine_executable=false (human privacy review).
+  All events require documented purpose.
+  Destinations must be in the verified allowlist.
+
+# ---------------------------------------------------------------------------
+# Global configuration
+# ---------------------------------------------------------------------------
+
+config:
+  fail_closed: true            # transport / evaluation errors -> deny
+  audit_all_decisions: true    # record allow AND deny to the audit chain
+  permit_ttl_seconds: 300      # single-use permits expire after 5 minutes
+
+# ---------------------------------------------------------------------------
+# Destination allowlist
+# ---------------------------------------------------------------------------
+
+lists:
+  verified_destinations:
+    - analytics.internal.example
+    - research.partner-a.example
+    - compliance-archive.example
+
+# ---------------------------------------------------------------------------
+# Sensitive category prefixes
+# ---------------------------------------------------------------------------
+
+sensitive_category_prefixes:
+  - behavior.health
+  - behavior.financial
+  - behavior.minor
+  - behavior.location.precise
+
+# ---------------------------------------------------------------------------
+# Action rules (evaluated in order — first match wins)
+# ---------------------------------------------------------------------------
+
+rules:
+
+  # -- Minor data: always requires human review ------------------------------
+  - action: behavior.event.share
+    id: minor-data-human-review
+    description: >
+      behavior.minor data requires human privacy review.
+      machine_executable=false: AI pipelines cannot auto-approve minor data sharing.
+      Applies COPPA and equivalent regulations.
+    match:
+      field: context.eventCategory
+      op: eq
+      value: "behavior.minor"
+    machine_executable: false
+    decision: deny
+    reasons:
+      - "HOLD_HUMAN_REVIEW_REQUIRED: behavior.minor data cannot be auto-approved — machine_executable=false for minor categories; a human privacy reviewer must approve before this event may be shared"
+
+  # -- Sensitive categories: require consent ---------------------------------
+  - action: behavior.event.share
+    id: sensitive-consent-required
+    description: >
+      Sensitive behavioral data (health, financial, precise location) requires
+      explicit consent verification before sharing.
+    match:
+      field: context.eventCategory
+      op: starts_with_any
+      values:
+        - "behavior.health"
+        - "behavior.financial"
+        - "behavior.location.precise"
+    require:
+      all:
+        - field: context.purpose
+          op: present
+          error: "DENY_PURPOSE_MISSING: purpose field is required"
+        - field: context.purpose
+          op: not_empty
+          error: "DENY_PURPOSE_MISSING: purpose may not be empty"
+        - field: context.consentVerified
+          op: eq
+          value: true
+          error: "DENY_CONSENT_NOT_VERIFIED: sensitive category requires consentVerified=true"
+        - field: context.destination
+          op: in_list
+          list: verified_destinations
+          error: "DENY_DESTINATION_NOT_VERIFIED: destination is not in the verified allowlist"
+    decision: allow
+
+  # -- Non-sensitive categories: require purpose + verified destination ------
+  - action: behavior.event.share
+    id: non-sensitive-purpose-required
+    description: >
+      Non-sensitive behavioral events require documented purpose and verified
+      destination. Consent is recommended but not mandatory.
+    require:
+      all:
+        - field: context.purpose
+          op: present
+          error: "DENY_PURPOSE_MISSING: purpose field is required"
+        - field: context.purpose
+          op: not_empty
+          error: "DENY_PURPOSE_MISSING: purpose may not be empty"
+        - field: context.destination
+          op: in_list
+          list: verified_destinations
+          error: "DENY_DESTINATION_NOT_VERIFIED: destination is not in the verified allowlist"
+    decision: allow
+
+# ---------------------------------------------------------------------------
+# Audit
+# ---------------------------------------------------------------------------
+
+audit:
+  chain: sha256_linked           # SHA-256 hash-linked, append-only
+  signing: ed25519               # Ed25519-signed on export
+  export_schedule: "0 2 * * *"   # nightly export at 02:00 UTC
+  retention_days: 2555           # 7 years
+  include_denied: true           # denied sharing attempts must also be logged
+
+# ---------------------------------------------------------------------------
+# Webhooks
+# ---------------------------------------------------------------------------
+
+webhooks:
+  share_notify:
+    url: "${BEHAVIOR_WEBHOOK_URL}/atlasent/webhook"
+    events:
+      - decision.allow
+      - decision.deny
+    secret_env: ATLASENT_WEBHOOK_SECRET
+    retry:
+      max_attempts: 5
+      backoff: exponential

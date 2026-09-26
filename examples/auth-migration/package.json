@@ -1,0 +1,14 @@
+{
+  "name": "atlasent-example-auth-migration",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "before": "tsx before.ts",
+    "after": "tsx after.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.3",
+    "typescript": "^5.4.5"
+  }
+}

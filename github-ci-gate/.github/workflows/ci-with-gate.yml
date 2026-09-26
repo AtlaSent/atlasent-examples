@@ -1,0 +1,105 @@
+name: CI + AtlaSent Deploy Gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.sha.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: sha
+        run: echo "sha=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      - name: Run tests
+        run: echo "Tests pass"  # replace with your real test command, e.g. npm test
+
+  post-assertion:
+    # Only submit the CI assertion on pushes to main (not on PRs).
+    # The assertion tells AtlaSent that CI passed for this SHA so that the
+    # deployment gate policy can require context.activeAssertions to contain
+    # 'github.ci_passed' before issuing a permit.
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Submit CI assertion to AtlaSent
+        run: |
+          # Compute an expiry 24 hours from now in ISO 8601 format.
+          # GNU date (Linux) and BSD date (macOS) have different -d/-v flags;
+          # this one-liner handles both.
+          VALID_UNTIL=$(date -u -d '+24 hours' +%Y-%m-%dT%H:%M:%SZ 2>/dev/null \
+            || date -u -v+24H +%Y-%m-%dT%H:%M:%SZ)
+
+          curl -sf -X POST \
+            -H "Authorization: Bearer ${{ secrets.ATLASENT_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg assertion_type "github.ci_passed" \
+              --arg source_system "github" \
+              --arg subject_ref "${{ github.repository }}@${{ github.sha }}" \
+              --arg actor_id "${{ github.actor }}" \
+              --arg action_type "production.deploy" \
+              --arg trust_level "attested" \
+              --arg valid_until "$VALID_UNTIL" \
+              --arg run_id "${{ github.run_id }}" \
+              --arg workflow "${{ github.workflow }}" \
+              --arg sha "${{ github.sha }}" \
+              '{
+                assertion_type: $assertion_type,
+                source_system:  $source_system,
+                subject_ref:    $subject_ref,
+                actor_id:       $actor_id,
+                action_type:    $action_type,
+                trust_level:    $trust_level,
+                valid_until:    $valid_until,
+                payload: {
+                  run_id:   $run_id,
+                  workflow: $workflow,
+                  sha:      $sha
+                }
+              }')" \
+            https://api.atlasent.io/functions/v1/v1-assertions
+
+  deploy:
+    needs: post-assertion
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate deploy authorization
+        id: gate
+        run: |
+          RESPONSE=$(curl -sf -X POST \
+            -H "Authorization: Bearer ${{ secrets.ATLASENT_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg action_type "production.deploy" \
+              --arg actor_id "${{ github.actor }}" \
+              --arg sha "${{ github.sha }}" \
+              --arg repository "${{ github.repository }}" \
+              '{
+                action_type: $action_type,
+                actor_id:    $actor_id,
+                context: {
+                  sha:        $sha,
+                  repository: $repository
+                }
+              }')" \
+            https://api.atlasent.io/functions/v1/v1-evaluate)
+
+          echo "AtlaSent response: $RESPONSE"
+          echo "response=$RESPONSE" >> $GITHUB_OUTPUT
+
+          # Fail the job if the decision is not 'allow'.
+          # This is the fail-closed gate: if AtlaSent does not explicitly allow
+          # the deploy, the workflow stops here and the deploy step never runs.
+          echo "$RESPONSE" | jq -e '.decision == "allow"' > /dev/null
+
+      - name: Deploy
+        run: |
+          echo "AtlaSent authorized deploy for ${{ github.sha }}"
+          echo "Deploying..."  # replace with your real deploy command

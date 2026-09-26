@@ -1,0 +1,116 @@
+name: Salesforce Deploy Gate (production.deploy)
+
+# COPY-ME reference gate. Put this in the repo that deploys your Salesforce /
+# NetSuite change. It gates the deploy on an AtlaSent production.deploy permit:
+#   build the deploy plan -> evaluate (bind the plan digest) -> verify the permit
+#   AT THE DEPLOY JOB (the real execution boundary) -> only then deploy.
+# Fail-closed: the deploy step runs only after an allow + a verified permit.
+#
+# Wire shape (validated live 2026-06-25):
+#   evaluate  { action_type, actor_id, target_id, environment, execution_payload_hash, context }
+#             -> { decision, permit_token, deny_code, audit_entry_hash }
+#   verify    { permit_token, action_type, actor_id, environment, payload_hash }  <- top-level
+#             -> { valid, outcome, verify_error_code }
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["sample-metadata/**", "force-app/**"]
+
+jobs:
+  gate-and-deploy:
+    name: Gate and deploy the Salesforce change
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
+      # REQUIRED — must end in /functions/v1: https://api.atlasent.io/functions/v1
+      ATLASENT_API_URL: ${{ secrets.ATLASENT_API_URL }}
+      ACTION_TYPE: production.deploy
+      TARGET_ID: salesforce:acme-prod
+      TARGET_ENV: production
+      # Must match an entry in the policy's allow_actors.
+      ACTOR: github:acme-release-bot
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build deploy plan + digest
+        id: build
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash build.sh
+          digest=$(cat out/.digest)
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "deploy-plan digest: sha256:$digest"
+
+      - name: Evaluate production.deploy
+        id: evaluate
+        shell: bash
+        run: |
+          set -euo pipefail
+          body=$(jq -n \
+            --arg action_type "$ACTION_TYPE" \
+            --arg actor_id "$ACTOR" \
+            --arg target_id "$TARGET_ID" \
+            --arg environment "$TARGET_ENV" \
+            --arg digest "${{ steps.build.outputs.digest }}" \
+            '{action_type:$action_type, actor_id:$actor_id, target_id:$target_id,
+              environment:$environment, execution_payload_hash:$digest,
+              context:{environment:$environment,
+                       target_system:"salesforce", plan_format:"salesforce-change-set",
+                       authority_path:"change-advisory-board", canonical_plan_digest:$digest,
+                       org:"acme-prod", approvals:2, change_window:true, state_snapshot:$digest}}')
+          response=$(curl -fsS \
+            -H "authorization: Bearer $ATLASENT_API_KEY" \
+            -H "content-type: application/json" \
+            -d "$body" "$ATLASENT_API_URL/v1-evaluate")
+          decision=$(jq -r '.decision' <<<"$response" | tr '[:upper:]' '[:lower:]')
+          permit_token=$(jq -r '.permit_token // empty' <<<"$response")
+          deny_code=$(jq -r '.deny_code // empty' <<<"$response")
+          echo "permit_token=$permit_token" >> "$GITHUB_OUTPUT"
+          echo "audit_hash=$(jq -r '.audit_entry_hash // empty' <<<"$response")" >> "$GITHUB_OUTPUT"
+          echo "AtlaSent decision: $decision  permit: ${permit_token:0:16}…"
+          if [ "$decision" != "allow" ] || [ -z "$permit_token" ]; then
+            echo "::error::AtlaSent blocked production.deploy (decision=$decision deny_code=$deny_code)."
+            exit 1
+          fi
+
+      - name: Verify permit (execution boundary)
+        shell: bash
+        run: |
+          set -euo pipefail
+          body=$(jq -n \
+            --arg permit_token "${{ steps.evaluate.outputs.permit_token }}" \
+            --arg action_type "$ACTION_TYPE" \
+            --arg actor_id "$ACTOR" \
+            --arg environment "$TARGET_ENV" \
+            --arg payload_hash "${{ steps.build.outputs.digest }}" \
+            '{permit_token:$permit_token, action_type:$action_type, actor_id:$actor_id,
+              environment:$environment, payload_hash:$payload_hash}')
+          response=$(curl -fsS \
+            -H "authorization: Bearer $ATLASENT_API_KEY" \
+            -H "content-type: application/json" \
+            -d "$body" "$ATLASENT_API_URL/v1-verify-permit")
+          valid=$(jq -r '.valid // false' <<<"$response")
+          echo "AtlaSent permit verification: $valid"
+          if [ "$valid" != "true" ]; then
+            echo "::error::Permit verification failed: $(jq -rc '{outcome, verify_error_code, reason}' <<<"$response")"
+            exit 1
+          fi
+
+      - name: Deploy the Salesforce change
+        run: |
+          echo "Deploying deploy-plan sha256:${{ steps.build.outputs.digest }} to $TARGET_ID ($TARGET_ENV)"
+          # Replace with the real deploy, e.g.:
+          #   sf project deploy start --target-org acme-prod --manifest out/package.xml
+
+      - name: Audit evidence
+        if: always()
+        run: |
+          echo "action=production.deploy target=$TARGET_ID environment=$TARGET_ENV"
+          echo "payload_hash=sha256:${{ steps.build.outputs.digest }}"
+          echo "permit_token=${{ steps.evaluate.outputs.permit_token }}"
+          echo "audit_entry_hash=${{ steps.evaluate.outputs.audit_hash }}"

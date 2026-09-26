@@ -1,0 +1,15 @@
+{
+  "name": "atlasent-example-sso-walkthrough",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "npx tsx sso_walkthrough.ts",
+    "smoke": "ATLASENT_DRY_RUN=true npx tsx sso_walkthrough.ts"
+  },
+  "dependencies": {
+    "@atlasent/sdk": "2.10.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0"
+  }
+}

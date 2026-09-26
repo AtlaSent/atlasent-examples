@@ -1,0 +1,94 @@
+# AtlaSent Deploy Gate — GitLab CI
+#
+# Gates "deploy checkout-api to production" on an AtlaSent permit, the same
+# Deploy Gate V1 story as the GitHub Actions quickstart — for teams on GitLab.
+#
+# Wire shape (validated live against the hosted runtime, mirrors
+# github-action-deploy/.github/workflows/deploy.yml):
+#   - evaluate request:  { action_type, actor_id, context:{ environment, ... } }
+#   - evaluate response: { decision, permit_token, deny_code, request_id, audit_entry_hash }
+#   - verify request:    { permit_token, action_type, actor_id, environment }   # environment is TOP-LEVEL
+#   - verify response:   { valid, outcome, verify_audit_hash }
+#
+# Fail-closed: the Deploy step runs ONLY after an allow + a verified permit.
+# Any non-allow decision, missing permit, or failed verification exits non-zero
+# and the deploy never runs.
+#
+# Setup (GitLab → Settings → CI/CD → Variables), both "Masked":
+#   ATLASENT_API_KEY   ask_live_* / ask_test_*  (mint in the AtlaSent console)
+#   ATLASENT_API_URL   the AtlaSent API base, ENDING IN /functions/v1:
+#                      https://api.atlasent.io/functions/v1
+#                      (self-hosted: your deployment's
+#                       https://<project-ref>.supabase.co/functions/v1)
+
+stages:
+  - deploy
+
+deploy_checkout_api:
+  stage: deploy
+  image: alpine:3.20
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  variables:
+    SERVICE: checkout-api
+    TARGET_ENV: production
+    ACTION_TYPE: production.deploy
+    # Canonical caller identity for a GitLab CI runner.
+    ACTOR: "gitlab:$GITLAB_USER_LOGIN"
+  before_script:
+    - apk add --no-cache curl jq
+    - test -n "$ATLASENT_API_KEY" || { echo "ATLASENT_API_KEY is not set (CI/CD variable)"; exit 1; }
+    - test -n "$ATLASENT_API_URL" || { echo "ATLASENT_API_URL is not set — must end in /functions/v1"; exit 1; }
+  script:
+    - |
+      set -eu
+      ATLASENT_API_URL="${ATLASENT_API_URL%/}"
+
+      echo "==> Evaluate $ACTION_TYPE for $ACTOR in $TARGET_ENV"
+      body=$(jq -n \
+        --arg action_type "$ACTION_TYPE" \
+        --arg actor_id "$ACTOR" \
+        --arg service "$SERVICE" \
+        --arg environment "$TARGET_ENV" \
+        --arg ref "$CI_COMMIT_REF_NAME" \
+        --arg sha "$CI_COMMIT_SHA" \
+        '{action_type:$action_type, actor_id:$actor_id,
+          context:{environment:$environment, service:$service, ref:$ref, sha:$sha,
+                   approvals:2, change_window:true}}')
+      response=$(curl -fsS \
+        -H "authorization: Bearer $ATLASENT_API_KEY" \
+        -H "content-type: application/json" \
+        -d "$body" \
+        "$ATLASENT_API_URL/v1-evaluate")
+      decision=$(echo "$response" | jq -r '.decision' | tr '[:upper:]' '[:lower:]')
+      permit_token=$(echo "$response" | jq -r '.permit_token // empty')
+      audit_hash=$(echo "$response" | jq -r '.audit_entry_hash // empty')
+      deny_code=$(echo "$response" | jq -r '.deny_code // empty')
+      echo "AtlaSent decision: $decision  permit: ${permit_token:0:16}…  audit: $audit_hash"
+      if [ "$decision" != "allow" ] || [ -z "$permit_token" ]; then
+        echo "AtlaSent blocked $ACTION_TYPE (decision=$decision deny_code=$deny_code). Deploy NOT run."
+        exit 1
+      fi
+
+      echo "==> Verify permit"
+      vbody=$(jq -n \
+        --arg permit_token "$permit_token" \
+        --arg action_type "$ACTION_TYPE" \
+        --arg actor_id "$ACTOR" \
+        --arg environment "$TARGET_ENV" \
+        '{permit_token:$permit_token, action_type:$action_type, actor_id:$actor_id, environment:$environment}')
+      vresponse=$(curl -fsS \
+        -H "authorization: Bearer $ATLASENT_API_KEY" \
+        -H "content-type: application/json" \
+        -d "$vbody" \
+        "$ATLASENT_API_URL/v1-verify-permit")
+      valid=$(echo "$vresponse" | jq -r '.valid // false')
+      echo "AtlaSent permit verification: $valid"
+      if [ "$valid" != "true" ]; then
+        echo "Permit verification failed: $(echo "$vresponse" | jq -rc '{outcome, verify_error_code, reason}'). Deploy NOT run."
+        exit 1
+      fi
+
+      echo "==> Deploy $SERVICE to $TARGET_ENV at $CI_COMMIT_SHA"
+      # Replace this line with your real deployment command.
+      echo "deployed (gated by AtlaSent permit ${permit_token:0:16}…, audit $audit_hash)"

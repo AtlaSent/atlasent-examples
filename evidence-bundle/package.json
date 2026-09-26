@@ -1,0 +1,18 @@
+{
+  "name": "atlasent-evidence-bundle",
+  "version": "1.0.0",
+  "description": "Example: generate a SOC 2 Type II evidence bundle, print sha256 for auditor handoff, list all bundles",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@atlasent/sdk": "2.10.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.4.0"
+  }
+}
