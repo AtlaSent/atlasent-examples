@@ -1,6 +1,6 @@
 # WARNING: This example uses a disabled endpoint that is not deployed in production.
 # The `/v1/sso/connections` routes are served by the `v1-sso` edge function,
-# which is listed in atlasent-api/supabase/runtime-functions-disabled.json.
+# which the AtlaSent API lists as disabled (not deployed in production).
 # Calls to these routes will return 404 in production.
 
 """flows/06-sso-walkthrough/sso_walkthrough.py

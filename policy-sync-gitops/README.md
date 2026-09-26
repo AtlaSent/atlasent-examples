@@ -30,4 +30,4 @@ policy-sync-gitops/
 
 ## Bundle Format
 
-See the full [Policy Sync guide](https://github.com/atlasent-systems-inc/atlasent-docs/blob/main/guides/policy-sync.md) for the complete policy entry schema and naming conventions.
+The complete policy entry schema and naming conventions are in AtlaSent's internal Policy Sync guide, which is not public yet.

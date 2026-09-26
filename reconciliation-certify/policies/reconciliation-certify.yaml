@@ -4,7 +4,6 @@
 # Load into the AtlaSent engine via the console or the API:
 #
 # NOTE: v1-policy-bundles is disabled in production and will return 404.
-# See atlasent-api/supabase/runtime-functions-disabled.json.
 # Use the AtlaSent Console UI to load policy bundles instead.
 #   curl -X POST https://api.atlasent.io/functions/v1/v1-policy-bundles \
 #     -H "Authorization: Bearer $ATLASENT_API_KEY" \

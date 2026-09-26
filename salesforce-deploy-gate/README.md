@@ -31,8 +31,8 @@ profile** — not a new Canon identity.
 > - **Optional real ServiceNow mode** (`connectors.ts`, opt-in via
 >   `USE_REAL_SERVICENOW_API=true`): makes a real, read-only Table API GET
 >   against `change_request` (Basic Auth, an `itil`-scoped integration user —
->   the pattern this org has already proven live against a real PDI, see
->   `atlasent-api/docs/integrations/SERVICENOW_OAUTH_SETUP.md`) and parses the
+>   the pattern AtlaSent has already proven live against a real PDI, per its
+>   internal ServiceNow OAuth setup guide) and parses the
 >   real JSON response into the same shape. ServiceNow has no equivalent
 >   official deploy CLI, so this reads the change_request record directly
 >   instead of shelling out. **Not been run against a live instance from this

@@ -92,7 +92,7 @@ ATLASENT_API_URL=http://127.0.0.1:4747 ATLASENT_API_KEY=mock npx tsx main.ts
 
 Load `policies/quality-capa.yaml` into your AtlaSent org:
 
-> ⚠️ **WARNING**: This endpoint (`v1-policy-bundles`) is disabled in production and will return 404. See `atlasent-api/supabase/runtime-functions-disabled.json`.
+> ⚠️ **WARNING**: This endpoint (`v1-policy-bundles`) is disabled in production and will return 404.
 
 ```bash
 curl -X POST https://api.atlasent.io/functions/v1/v1-policy-bundles \

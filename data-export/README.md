@@ -50,7 +50,7 @@ Without an API key the scripts run in offline stub mode — no network required.
 
 ## Step 3: Seed the policy pack
 
-> ⚠️ **WARNING**: This endpoint (`v1-policy-bundles`) is disabled in production and will return 404. See `atlasent-api/supabase/runtime-functions-disabled.json`.
+> ⚠️ **WARNING**: This endpoint (`v1-policy-bundles`) is disabled in production and will return 404.
 
 ```bash
 curl -X POST https://api.atlasent.io/functions/v1/v1-policy-bundles \

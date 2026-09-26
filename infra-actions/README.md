@@ -112,7 +112,7 @@ const permit = await atlasent.protect({
 
 Load `policies/infra-actions.yaml` into your AtlaSent org:
 
-> ⚠️ **WARNING**: This endpoint (`v1-policy-bundles`) is disabled in production and will return 404. See `atlasent-api/supabase/runtime-functions-disabled.json`.
+> ⚠️ **WARNING**: This endpoint (`v1-policy-bundles`) is disabled in production and will return 404.
 
 ```bash
 curl -X POST https://api.atlasent.io/functions/v1/v1-policy-bundles \

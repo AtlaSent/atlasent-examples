@@ -78,8 +78,8 @@ throws unless the permit authorizes the **exact** release:
 
 Live mode obtains the permit from `/v1-evaluate` and verifies it via
 `/v1-verify-permit` before ever calling `release()`. The mapping of these
-scenarios to the full acceptance suite is in the atlasent-api manifest
-`docs/acceptance/clinical-unblinding-acceptance-manifest.json`.
+scenarios to the full acceptance suite is kept in AtlaSent's internal
+clinical-unblinding acceptance manifest.
 
 ## Boundaries
 

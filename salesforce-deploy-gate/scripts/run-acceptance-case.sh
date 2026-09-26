@@ -119,10 +119,10 @@ case "$CASE" in
 
   SF-3) # missing required CAB approval
     # Expects NO_AUTHORITY, not INSUFFICIENT_APPROVALS. The reference org's
-    # production.deploy bundle (seed_saas_production_safeguard, atlasent-api
-    # migration 20260712000000_seed_saas_production_safeguard_fn.sql) intentionally
+    # production.deploy bundle (seed_saas_production_safeguard, provisioned by an
+    # AtlaSent API migration) intentionally
     # requires a verified human-approval ARTIFACT for this action — a bare
-    # context.approvals count is not sufficient authority, so v1-evaluate/handler.ts
+    # context.approvals count is not sufficient authority, so the API's evaluate handler
     # overrides the rule engine's default INSUFFICIENT_APPROVALS with the frozen
     # NO_AUTHORITY code (documented in that migration's header, "verified live
     # 2026-07-17"). This is the intended, stricter assurance model for this bundle —
@@ -133,9 +133,8 @@ case "$CASE" in
     [ "$dec" != "allow" ] && [ "$code" = "NO_AUTHORITY" ] && pass "1 approval (need a verified approval artifact) denied NO_AUTHORITY — no deploy" || fail "expected NO_AUTHORITY, got decision=$dec code=$code" ;;
 
   SF-4) # outside the change window
-    # Expects the explicit OUTSIDE_CHANGE_WINDOW deny code (atlasent-api migration
-    # 20260863000000_saas_safeguard_outside_change_window_deny.sql, PR #1970,
-    # merged 2026-08-11). seed_saas_production_safeguard's production.deploy
+    # Expects the explicit OUTSIDE_CHANGE_WINDOW deny code (added by an AtlaSent
+    # API migration merged 2026-08-11). seed_saas_production_safeguard's production.deploy
     # bundle now carries a SECOND template — an explicit
     # DENY(OUTSIDE_CHANGE_WINDOW) when context.environment=production AND
     # context.change_window=false — evaluated after the existing ALLOW template,
