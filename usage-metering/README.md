@@ -89,7 +89,7 @@ do not change `decision` or `org_id` between pages.
 
 ## Next steps
 
-- See [`atlasent-docs/guides/usage-metering.md`](https://docs.atlasent.io)
-  for the full API reference and billing implications.
+- See the [AtlaSent documentation](https://docs.atlasent.io) for the full API
+  reference and billing implications.
 - See [`../billing-entitlement/`](../billing-entitlement/) for the complementary
   entitlement-check example that gates feature access based on plan.

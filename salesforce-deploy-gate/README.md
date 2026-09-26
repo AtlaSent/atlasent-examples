@@ -3,11 +3,11 @@
 Gate a **change to a business system of record** (Salesforce metadata deploy,
 NetSuite SDF deploy, ServiceNow change request, Jira change/incident issue,
 an AWS infrastructure change via Terraform, or a live config edit) on an AtlaSent permit, using the **`production.deploy`** action. This is a
-**vendor-neutral "authorized change or deployment plan" execution** flow
-(atlasent#438): AtlaSent authorizes the exact change plan and preserves the
+**vendor-neutral "authorized change or deployment plan" execution** flow:
+AtlaSent authorizes the exact change plan and preserves the
 evidence, and the plan converges on `production.deploy` regardless of vendor.
 **No new action class:** per the canonical Business Systems Change Management
-pack (`CAP-BSCM-001`, atlasent#440), a business-system release is
+pack (`CAP-BSCM-001`), a business-system release is
 `production.deploy`, and a live config edit is its **state-snapshot execution
 profile** — not a new Canon identity.
 

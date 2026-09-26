@@ -26,7 +26,7 @@ atlasent.configure({ baseUrl: process.env.ATLASENT_API_URL ?? "https://api.atlas
 
 // ── Operational visibility ─────────────────────────────────────────
 // A single structured log line per protected call site, carrying the
-// six fields described in atlasent-docs/architecture/operational-visibility.md.
+// six fields listed in emitAuditLine() below.
 
 function emitAuditLine(args: {
   action: string;

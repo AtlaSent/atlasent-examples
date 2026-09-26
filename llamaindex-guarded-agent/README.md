@@ -33,4 +33,4 @@ npm run demo
 
 Each tool call is evaluated against your AtlaSent policy. Allowed calls print the result with a permit ID annotation. Denied calls print the denial reason and evaluation ID.
 
-See [guides/llamaindex.md](https://docs.atlasent.io) for the full TypeScript integration guide.
+See the [AtlaSent documentation](https://docs.atlasent.io) for the full TypeScript integration guide.

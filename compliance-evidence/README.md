@@ -75,4 +75,4 @@ For a finance-control evidence package — JE approval chains, vendor master sep
 - Every emergency override in the period, with the dual-approval roster (CFO + audit committee chair) attached.
 - The auto-re-lock event that closed the override's TTL window.
 
-The console's audit page produces the same evidence shape via the **Export CSV (evidence package)** button — see the `governed-close-operations` runbook in `atlasent-docs` for the side-by-side flow.
+The console's audit page produces the same evidence shape via the **Export CSV (evidence package)** button — see the [Governed close operations](https://docs.atlasent.io/runbooks/governed-close-operations) runbook for the side-by-side flow.

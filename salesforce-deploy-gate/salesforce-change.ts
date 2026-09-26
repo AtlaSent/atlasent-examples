@@ -322,7 +322,7 @@ function normalize(change: BusinessSystemChange): EvaluateRequest {
       execution_payload_hash: payload_hash,
       context: {
         environment: change.environment,
-        // Vendor-neutral change-plan conventions (atlasent#438). They ride the OPEN
+        // Vendor-neutral change-plan conventions. They ride the OPEN
         // evaluate context; canonical_plan_digest maps onto the existing permit
         // payload-hash binding — no wire change.
         target_system: change.system,

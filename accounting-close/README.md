@@ -1,10 +1,6 @@
 # Accounting Close Authorization — Close-Ops Pilot
 
 > **Status:** This is the runnable substrate for the close-ops pilot tenant.
-> Companion to `docs/PILOT_RUNBOOK_2026-04-29.md`
-> (operator-internal) and
-> `docs/CLOSE_OPS_PILOT_OFFER.md`
-> (what the pilot tenant gets, in business terms).
 
 AtlaSent enforces non-bypassable authorization for accounting close workflows
 and produces an immutable, offline-verifiable audit-evidence pack for every
@@ -187,8 +183,5 @@ docstring.
 ## Related
 
 - Runbook: [Governed close operations](https://docs.atlasent.io/runbooks/governed-close-operations) — the operational playbook
-- Pilot runbook: `PILOT_RUNBOOK_2026-04-29.md` — operator-internal day-by-day
-- Pilot offer: `CLOSE_OPS_PILOT_OFFER.md` — what the pilot tenant gets
-- Audit evidence runbook: `AUDIT_EVIDENCE_RUNBOOK.md` — handing exports to an external auditor
 - ERP webhook integration: [`erp-webhook.ts`](./erp-webhook.ts) — receive `evaluation.deny` / `approval.requested` events to wire AtlaSent into the close-management tool of record
 - Policy bundle: [`policies/accounting-close-gate.yaml`](./policies/accounting-close-gate.yaml) — the same rules in the wire format the live API consumes

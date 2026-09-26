@@ -114,7 +114,7 @@ When integrating via the AtlaSent SDK (rather than raw HTTP), there are two form
 | [`basic-evaluate/`](basic-evaluate/) | Raw HTTP `/v1-evaluate` + `/v1-verify-permit` | You can't (or don't want to) use the SDK and need to see the wire shape. The SDK examples above do both calls for you. |
 | [`protected-actions/`](protected-actions/) | `requirePermit()` — descriptor form for dangerous operations | The action is described by a richer `ProtectedAction` (`resource_id` + `environment`) — e.g., `database.table.drop`. |
 
-The canonical surface and the boundary contract are documented in [`atlasent-docs/concepts/runtime-flow`](https://docs.atlasent.io/concepts/runtime-flow) and the [quickstart](https://docs.atlasent.io/quickstart/first-evaluation).
+The canonical surface and the boundary contract are documented in [Runtime flow](https://docs.atlasent.io/concepts/runtime-flow) and the [quickstart](https://docs.atlasent.io/quickstart/first-evaluation).
 
 ## Regulated environments
 

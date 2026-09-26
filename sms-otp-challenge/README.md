@@ -169,5 +169,5 @@ The full chain is available in the AtlaSent console under
   SSO integration that complements OTP challenges.
 - See [`../security-actions/`](../security-actions/) for more high-privilege
   action gating patterns.
-- See [`atlasent-docs/guides/sms-otp-secondary-challenge.md`](https://docs.atlasent.io)
-  for full API reference and integration patterns.
+- See the [AtlaSent documentation](https://docs.atlasent.io) for the full API
+  reference and integration patterns.

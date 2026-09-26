@@ -13,8 +13,19 @@ the exact steps. In general:
 - **Node / TypeScript examples:** `cd <example> && npm install`, then the
   scripts listed in that example's `package.json` (for example
   `npm run typecheck`, `npm test`, `npm start`).
-- **Python examples:** `cd <example> && pip install -r requirements.txt`,
-  then run the script named in the example's README.
+- **Python examples:** most Python examples ship a `requirements.txt`. To
+  list the ones that do:
+
+  ```sh
+  find . -name node_modules -prune -o -name requirements.txt -print
+  ```
+
+  For those, run `cd <example> && pip install -r requirements.txt`, then run
+  the script named in the example's README. A few Python examples have no
+  `requirements.txt` (currently `database-actions/migration-apply`,
+  `database-actions/schema-drop`, `deployment-v2` and `scim-idp-sync`). They
+  import only the Python standard library and the AtlaSent SDK, so install
+  the SDK directly with `pip install atlasent`.
 - **Go examples:** `cd <example> && go run main.go` (see the example's README).
 - **GitHub Actions / GitLab CI examples:** copy the workflow into your own
   repository and set the secrets the example lists.
