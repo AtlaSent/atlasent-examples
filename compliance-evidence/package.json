@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Example: trigger and display an AtlaSent SOC 2 evidence run",
   "scripts": {
-    "start": "ts-node -r dotenv/config src/index.ts"
+    "start": "tsx -r dotenv/config src/index.ts"
   },
   "dependencies": {
     "@atlasent/sdk": "2.16.0",
@@ -11,7 +11,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "ts-node": "^10.9.0",
-    "typescript": "^5.4.0"
+    "tsx": "^4.0.0",
+    "typescript": "^7.0.2"
   }
 }

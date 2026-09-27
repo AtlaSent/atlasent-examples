@@ -18,6 +18,14 @@ grouped by date.
   workflow examples.
 - README is rewritten for external developers: the internal-only package
   pointer is removed and the primary scenario is described more plainly.
+- TypeScript is upgraded to 7.x in 24 example directories. `accounting-close`
+  now sets `"types": ["node"]` (TS 7 no longer includes `@types/*` by default)
+  and `salesforce-deploy-gate` uses `moduleResolution: "bundler"` (TS 7 removed
+  `"node"`). `compliance-evidence` and `webhook-receiver` run with `tsx`
+  instead of `ts-node`, which does not work with TS 7. `@types/node` stays on
+  20.x to match the Node version CI uses.
+- Dependabot no longer opens major-version PRs for `typescript` or
+  `@types/node`. These upgrades are done by hand.
 
 ## 2026-09-26 — First public release
 
