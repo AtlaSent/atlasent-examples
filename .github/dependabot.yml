@@ -6,6 +6,18 @@ updates:
       - "/**"
     schedule:
       interval: weekly
+    # Majors for typescript and @types/node are upgraded by hand, not by
+    # Dependabot. A TypeScript major is a coordinated change across every
+    # example (TS 7 dropped the classic compiler API that ts-node needs,
+    # removed moduleResolution "node", and stopped auto-including @types —
+    # each tsconfig must opt in with "types": ["node"]). @types/node is
+    # pinned to the Node major the examples actually run on (CI uses Node
+    # 20), so a newer major would type-check APIs that don't exist at runtime.
+    ignore:
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     groups:
       npm-minor-and-patch:
         update-types:
