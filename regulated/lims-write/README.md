@@ -13,7 +13,7 @@ transport error the write body is never reached.
 ## Run it (<3 min)
 
 ```bash
-export ATLASENT_API_KEY=ask_test_REPLACE_ME
+export ATLASENT_API_KEY=ask_live_REPLACE_ME
 just install   # one-time
 just run
 ```

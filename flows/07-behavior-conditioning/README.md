@@ -36,7 +36,7 @@ attaching them as metadata to evaluate requests.
 ## Run it
 
 ```bash
-export ATLASENT_API_KEY=ask_test_...
+export ATLASENT_API_KEY=ask_live_...
 # Optional:
 export ATLASENT_BEHAVIOR_URL=http://localhost:3001   # default
 export DEMO_USER_ID=demo-user-001                    # default

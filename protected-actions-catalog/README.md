@@ -22,7 +22,7 @@ decision and reason.
 ## Run it
 
 ```bash
-export ATLASENT_API_KEY=ask_test_...
+export ATLASENT_API_KEY=ask_live_...
 npm install
 npm start
 ```
