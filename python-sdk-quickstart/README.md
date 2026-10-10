@@ -15,7 +15,7 @@ Mirror of `../typescript-sdk-quickstart/`. See also
 
 ```bash
 pip install -r requirements.txt
-export ATLASENT_API_KEY=ask_test_...
+export ATLASENT_API_KEY=ask_live_...
 # AtlaSent API base URL (this is also the example's default; self-hosted:
 # your own deployment's https://<project-ref>.supabase.co/functions/v1)
 export ATLASENT_BASE_URL=https://api.atlasent.io/functions/v1

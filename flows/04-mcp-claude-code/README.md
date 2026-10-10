@@ -7,7 +7,7 @@ repo and Claude Code picks it up automatically on the next session.
 ## Run it (<3 min)
 
 ```bash
-export ATLASENT_API_KEY=ask_test_REPLACE_ME
+export ATLASENT_API_KEY=ask_live_REPLACE_ME
 just run   # launches `claude` in this directory
 ```
 

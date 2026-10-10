@@ -8,7 +8,7 @@ agent can reason about the denial instead of silently stalling.
 ## Run it (<3 min)
 
 ```bash
-export ATLASENT_API_KEY=ask_test_REPLACE_ME
+export ATLASENT_API_KEY=ask_live_REPLACE_ME
 export OPENAI_API_KEY=sk-...
 just install   # one-time
 just run

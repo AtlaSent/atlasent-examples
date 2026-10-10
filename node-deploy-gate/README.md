@@ -15,7 +15,7 @@ Standalone Node.js CI deploy gate for teams that do not use GitHub Actions. It u
 ## Run
 
 ```bash
-export ATLASENT_API_KEY=ask_test_...
+export ATLASENT_API_KEY=ask_live_...
 export ATLASENT_API_URL=https://api.atlasent.io/functions/v1
 npm install
 npm start

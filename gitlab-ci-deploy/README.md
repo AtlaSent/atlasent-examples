@@ -10,15 +10,16 @@ it drops into any GitLab runner.
 
 ## Setup
 
-1. **Mint an API key** in the AtlaSent console (`ask_live_*` for production,
-   `ask_test_*` to try it against a test policy).
+1. **Mint an API key** in the AtlaSent console. Console keys are live keys
+   (`ask_live_*`); a live key is accepted only with `environment: production`,
+   which this pipeline sends (`TARGET_ENV`).
 2. **Add two CI/CD variables** — GitLab → *Settings → CI/CD → Variables*
    (mark both **Masked**; mark `ATLASENT_API_KEY` **Protected** if `main` is
    protected):
 
    | Variable | Value |
    |----------|-------|
-   | `ATLASENT_API_KEY` | your `ask_live_*` / `ask_test_*` key |
+   | `ATLASENT_API_KEY` | your `ask_live_*` key |
    | `ATLASENT_API_URL` | `https://api.atlasent.io/functions/v1` (the AtlaSent API base URL — **must end in `/functions/v1`**) |
 
    > **`ATLASENT_API_URL` must end in `/functions/v1`** — use
