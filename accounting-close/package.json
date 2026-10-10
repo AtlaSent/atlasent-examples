@@ -12,10 +12,10 @@
     "mock": "npx @atlasent/sdk mock"
   },
   "dependencies": {
-    "@atlasent/sdk": "2.16.0"
+    "@atlasent/sdk": "2.21.2"
   },
   "devDependencies": {
-    "@types/node": "^20.19.41",
+    "@types/node": "^20.19.43",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   }
