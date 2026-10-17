@@ -10,7 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@atlasent/enforce": "2.0.0"
+    "@atlasent/enforce": "2.1.0"
   },
   "devDependencies": {
     "typescript": "^7.0.2",
