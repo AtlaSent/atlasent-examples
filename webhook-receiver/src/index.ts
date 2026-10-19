@@ -24,9 +24,17 @@ app.post(
       return res.status(401).send('Missing signature');
     }
 
+    // The SDK takes the original UTF-8 text, not a parsed/re-serialized object.
+    // Refuse bytes that cannot round-trip so decoding cannot alter signed data.
+    if (!Buffer.isBuffer(req.body)) return res.status(400).send('Expected JSON body');
+    const rawBody = req.body.toString('utf-8');
+    if (!Buffer.from(rawBody, 'utf-8').equals(req.body)) {
+      return res.status(400).send('Invalid UTF-8 body');
+    }
+
     // Verify HMAC-SHA256 signature using constant-time comparison
     const isValid = await verifyWebhookSignature(
-      req.body as Buffer,
+      rawBody,
       signature,
       WEBHOOK_SECRET!,
     );
@@ -38,7 +46,7 @@ app.post(
 
     let event: WebhookPayload<Record<string, unknown>>;
     try {
-      event = JSON.parse((req.body as Buffer).toString('utf-8'));
+      event = JSON.parse(rawBody);
     } catch {
       return res.status(400).send('Invalid JSON body');
     }
@@ -117,6 +125,9 @@ async function handleEvent(
   }
 }
 
-app.listen(PORT, () => {
-  console.log(`Webhook receiver listening on http://localhost:${PORT}/webhooks/atlasent`);
+const server = app.listen(PORT, () => {
+  const address = server.address();
+  const port = address && typeof address === 'object' ? address.port : PORT;
+  console.log(`Webhook receiver listening on http://localhost:${port}/webhooks/atlasent`);
 });
+
