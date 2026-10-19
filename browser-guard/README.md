@@ -21,7 +21,7 @@ your own integration.
 
 ## Prerequisites
 
-- Node.js 20+
+- Node.js 20.19+ or 22.12+ (required by Vite 8)
 - An AtlaSent account
 
 ## Environment variables
@@ -79,3 +79,4 @@ The app renders the decision with colour-coded styling:
 The SDK sends `Authorization: Bearer <key>` automatically. Bad keys
 return HTTP 401 (not 403). The app renders a helpful message for 401
 and 429 (rate limit) responses.
+
