@@ -80,8 +80,8 @@ async function main() {
       console.log(
         `${statusEmoji(control.status)} ${control.control_id} — ${control.title} (${control.status})`,
       );
-      for (const item of control.evidence) {
-        console.log(`   • ${item}`);
+      for (const [name, value] of Object.entries(control.evidence)) {
+        console.log(`   • ${name}: ${JSON.stringify(value)}`);
       }
       console.log();
     }
@@ -111,3 +111,4 @@ main().catch((err) => {
   console.error('Error:', err instanceof Error ? err.message : String(err));
   process.exit(1);
 });
+
