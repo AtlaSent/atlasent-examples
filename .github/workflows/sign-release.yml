@@ -39,6 +39,10 @@ jobs:
       statuses: write
     steps:
       - uses: actions/checkout@v7
+      # Before anything else: refuse unless the dispatcher (and anyone
+      # re-running this attempt) is on .github/production-dispatchers.json.
+      - name: Production dispatcher must be on the allowlist
+        uses: ./.github/actions/production-dispatcher-check
       - name: AtlaSent release gate
         uses: Atlasent/atlasent-action@v1
         env:
@@ -60,6 +64,11 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+
+      # Before anything else: refuse unless the dispatcher (and anyone
+      # re-running this attempt) is on .github/production-dispatchers.json.
+      - name: Production dispatcher must be on the allowlist
+        uses: ./.github/actions/production-dispatcher-check
 
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
