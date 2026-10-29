@@ -1,42 +1,48 @@
-# Example: Use AtlaSent to gate a production deployment
-name: Deploy with AtlaSent Gate
+# Example: gate two production deploys in one step with the batch
+# `evaluations:` input of Atlasent/atlasent-action@v1.
+#
+# Fail-closed: the step fails when any item is denied or held, or when any
+# allow fails permit verification. The deploy step below therefore runs only
+# when every item was verified. Per-item results are in the `decisions` output.
+#
+# production.deploy is change-controlled: each item is evaluated as this job's
+# verified workload identity, minted from its GitHub OIDC token (hence
+# `id-token: write`). Caller actor values cannot authorize it. Pass the key as
+# the ATLASENT_API_KEY environment variable; the action has no api-key input.
+name: Deploy with AtlaSent batch gate
 
 on:
   push:
     branches: [main]
 
 jobs:
-  gate:
-    name: AtlaSent Policy Gate
-    runs-on: ubuntu-latest
-    outputs:
-      decision: ${{ steps.atlasent.outputs.decision }}
-      permit-id: ${{ steps.atlasent.outputs.permit-id }}
-    steps:
-      - name: Evaluate deployment action
-        id: atlasent
-        uses: atlasent-systems-inc/atlasent-action@v2
-        with:
-          atlasent-api-url: ${{ secrets.ATLASENT_API_URL }}
-          atlasent-api-key: ${{ secrets.ATLASENT_API_KEY }}
-          action-id: production.deploy
-          actor-id: ${{ github.actor }}
-          target-id: ${{ github.repository }}
-          fail-on-deny: true
-
-      - name: Show decision
-        run: |
-          echo "Decision: ${{ steps.atlasent.outputs.decision }}"
-          echo "Risk: ${{ steps.atlasent.outputs.risk-level }} (${{ steps.atlasent.outputs.risk-score }})"
-          echo "Permit: ${{ steps.atlasent.outputs.permit-id }}"
-
   deploy:
-    name: Deploy
+    name: Gate and deploy
     runs-on: ubuntu-latest
-    needs: gate
-    if: needs.gate.outputs.decision == 'allow'
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
+
+      - name: Evaluate both deploys
+        id: atlasent
+        uses: Atlasent/atlasent-action@v1
+        env:
+          ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
+        with:
+          api-url: ${{ secrets.ATLASENT_API_URL }}
+          evaluations: |
+            [
+              {"action": "production.deploy", "environment": "production", "context": {"service": "api"}},
+              {"action": "production.deploy", "environment": "production", "context": {"service": "worker"}}
+            ]
+
+      - name: Show decisions
+        env:
+          DECISIONS: ${{ steps.atlasent.outputs.decisions }}
+        run: echo "$DECISIONS" | jq .
+
       - name: Deploy application
-        run: echo "Deploying with permit ${{ needs.gate.outputs.permit-id }}"
+        run: echo "Deploying api and worker"
         # Add your actual deploy steps here

@@ -25,9 +25,10 @@ jobs:
 
       - name: AtlaSent policy sync (dry run)
         id: sync
-        uses: atlasent-systems-inc/atlasent-action@main
+        uses: Atlasent/atlasent-action@v1
+        env:
+          ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
         with:
-          api-key: ${{ secrets.ATLASENT_API_KEY }}
           policy-sync: 'true'
           policy-bundle: 'policies/bundle.json'
           policy-source: 'github-pr'
@@ -75,9 +76,10 @@ jobs:
 
       - name: AtlaSent policy sync (apply)
         id: sync
-        uses: atlasent-systems-inc/atlasent-action@main
+        uses: Atlasent/atlasent-action@v1
+        env:
+          ATLASENT_API_KEY: ${{ secrets.ATLASENT_API_KEY }}
         with:
-          api-key: ${{ secrets.ATLASENT_API_KEY }}
           policy-sync: 'true'
           policy-bundle: 'policies/bundle.json'
           policy-source: 'github-main'
