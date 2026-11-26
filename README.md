@@ -2,6 +2,12 @@
 
 Runnable example integrations — GitHub Actions, raw HTTP, and SDK quickstarts — showing how CI/CD pipelines and agents call AtlaSent's evaluate/verify-permit API to gate protected actions such as production deploys.
 
+## Try AtlaSent for free
+
+[Open the refund demo in your browser](https://www.atlasent.io/refund-demo). Select the $72 refund to see why the sample policy requires manager approval. Compare it with the $18.99 request, inspect the sample decision log, or download the starter policy. All four scenarios use fictional orders. You can try them without registering or connecting a store.
+
+[Run a local AI assistant](local-refund-assistant/) if you want to explain a decision on your own computer. This optional example uses Ollama and a small model. The browser demo above works on its own.
+
 > **Versioning note (canonical).** AtlaSent has a single platform
 > version — `v1`. There is no "v2 product" and no "v2 surface."
 > The `v2/` directory below and the `@atlasent/sdk@^2` pin in some
