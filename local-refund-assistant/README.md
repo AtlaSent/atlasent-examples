@@ -8,10 +8,10 @@ Run a small language model on your own computer to explain a fictional refund ho
 2. Open **PowerShell** on Windows or **Terminal** on macOS or Linux. Paste the whole line below and press Enter.
 
 ```sh
-ollama run qwen3:4b "Explain this fictional record to a finance operator in two sentences. Use only the recorded facts. Refund amount USD 72. Decision HOLD. Reason: refunds of USD 50 or more require manager approval. Approval pending. Next step: send to finance manager for review."
+ollama run qwen3:4b "Explain the recorded decision in one sentence. Refund USD 72. Decision HOLD. Refunds of USD 50 or more require manager approval. Next step: send to finance manager for review. /no_think"
 ```
 
-The first run downloads [Qwen3 4B](https://ollama.com/library/qwen3:4b), about 2.5 GB. After that, you can rerun the command offline. Local generation uses your computer's memory and electricity and incurs no hosted-model token charges.
+The first run downloads [Qwen3 4B](https://ollama.com/library/qwen3:4b), about 2.5 GB. After that, you can rerun the command offline. On a CPU, allow a minute or more for the first answer. Local generation uses your computer's memory and electricity and incurs no hosted-model token charges.
 
 **Check your result.** Wording can vary. The answer should say the USD 72 refund is on hold because it exceeds the USD 50 approval threshold and direct the operator to the finance manager. If it says the refund was approved, issued, or sent for review, it added an event that never occurred.
 
