@@ -24,6 +24,15 @@ Deploy Gate V1 examples for AtlaSent.
 The primary walkthrough follows a single scenario: a team wants GitHub Actions to deploy `checkout-api` to production only when AtlaSent issues and verifies a permit for the `production.deploy` action. The other directories apply the same evaluate → permit → verify pattern to other protected actions and runtimes.
 
 
+## Choose your starting point
+
+- [Change Check](https://www.atlasent.io/change-check?utm_source=examples&utm_medium=readme): inspect a public GitHub PR before choosing a deployment gate.
+- [AI Permission Check](https://www.atlasent.io/ai-permission-check?utm_source=examples&utm_medium=readme): identify potentially consequential tool calls from a manifest.
+- [Approval Tester](https://www.atlasent.io/approval-tester?utm_source=examples&utm_medium=readme): explore approval-rule behavior.
+- [Create a workspace](https://console.atlasent.io/auth/sign-up?utm_source=examples&utm_medium=readme) when you are ready to configure an organization and test its own authorization path.
+
+Free checks and fictional examples are educational; neither establishes live customer acceptance. Start in a test environment with harmless actions, verify the exact execution boundary, and confirm native effects separately.
+
 ## Observe before you gate
 
 The enforcement examples below are intentionally the later stage of the product journey. A connector can start in **Observe** mode: report bounded facts for an already-resolved Canon action, surface them in AtlaSent Action Inbox/History, and let the organization choose whether to protect that action.
